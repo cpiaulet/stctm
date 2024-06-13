@@ -3,7 +3,7 @@
 
 
 If you use this code, please cite Caroline Piaulet-Ghorayeb.
-Official release of the code: Piaulet-Ghorayeb et al., submitted.
+First public release: Piaulet-Ghorayeb et al., submitted.
 
 Previous uses of the code:
 * Lim et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), on TRAPPIST-1 b
