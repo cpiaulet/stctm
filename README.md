@@ -12,4 +12,12 @@ Bare-bones skeleton of the code released for now - full user instructions and us
 
 Illustration of the module for the application of *stctm* to Visit 1 of TRAPPIST-1 b (Lim et al., 2023, https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), fitting spots only.
 
+## Installation
 
+### Dependencies
+
+### Example
+
+#### MCMC fits
+
+#### Post-processing
