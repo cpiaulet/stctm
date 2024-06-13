@@ -1,5 +1,5 @@
 # stctm
-*stctm* (STellar ConTamination Module) performs spectral retrievals on exoplanet transmission spectra assuming that the spectrum can be explained by stellar contamination alone.
+*stctm* (STellar ConTamination Modeling) performs spectral retrievals on exoplanet transmission spectra assuming that the spectrum can be explained by stellar contamination alone.
 
 
 If you use this code, please cite Caroline Piaulet-Ghorayeb.
