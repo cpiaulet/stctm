@@ -21,7 +21,7 @@ import pdb
 import pkg_resources
 import emcee
 import corner
-import pysynphot as S
+import pysynphot as psp
 import astropy.table as table
 import h5py
 import random as rdm
@@ -159,7 +159,7 @@ def load_phoenix_model(Teff, M, logG, wv_target=None, wv_edges=None, resPower_ta
         return wv_target, fStarSurfPymsg
     else:
         #load Phoenix model
-        sp = S.Icat('phoenix', Teff, M, logG)
+        sp = psp.Icat('phoenix', Teff, M, logG)
         # get wave and flux in expected units
         wavePhoenix = convertWave(sp.wave, 'A', 'um')
         fStarSurfPhoenix = convertIntensity(sp.flux, wavePhoenix, InputUnit='(ergs/s)/(cm**2*A)', WavelengthUnit='um', OutputUnit='W/(m**2*um)')

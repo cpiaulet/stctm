@@ -3,3 +3,6 @@ scipy
 emcee
 corner
 astropy
+pysynphot
+h5py
+pandas

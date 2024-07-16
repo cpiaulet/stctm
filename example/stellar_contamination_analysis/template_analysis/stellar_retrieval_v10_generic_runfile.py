@@ -39,7 +39,6 @@ import emcee
 import astropy.table as table
 import h5py
 from copy import deepcopy
-import imp 
 import sys
 import astropy.io as aio
 import shutil
@@ -177,6 +176,7 @@ if os.path.exists(stmodfile):
     print("Grid loaded, file closed.")
 # if not, generate it
 else:
+    pdb.set_trace()
     print("The stellar models grid does not exist !! It needs to be created with create_fixedR_grid_pymsg.py !!")
 
     

@@ -1,4 +1,5 @@
 from setuptools import setup
+from pip.req import parse_requirements
 
 with open("stctm/version.py", "r") as f:
     exec(f.read())
@@ -11,5 +12,5 @@ setup(name='stctm',
       author_email='caroline.piaulet@umontreal.ca',
       license='GNU GPL v3.0',
       packages=['stctm'],
-      install_requires=['numpy', 'scipy', 'emcee', 'corner', 'astropy'],
+      install_requires=parse_requirements("requirements.txt")
       zip_safe=False)
