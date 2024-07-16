@@ -23,7 +23,7 @@ You can install *stctm* from GitHub:
     pip install -e .
     
 ### Dependencies
-The dependencies of *smint* are 
+The dependencies of *stctm* are 
 * *NumPy*
 * *scipy*
 * *emcee*
