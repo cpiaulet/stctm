@@ -5,12 +5,11 @@ Created on Thu Jun 13, 2024
 @author: cpiaulet
 """
 
-from __future__ import print_function, division, absolute_import, unicode_literals
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
 import astropy.io as aio
-import stellar_retrieval_utilities as sru
+import stctm.stellar_retrieval_utilities as sru
 
 import pandas as pd
 import os        

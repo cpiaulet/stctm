@@ -32,7 +32,7 @@ os.environ['PYSYN_CDBS'] = "/Users/caroline/trds"
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pytransmspec as ptspec
+import stctm.pytransmspec as ptspec
 import astropy.constants as const
 import pdb
 import emcee
@@ -43,7 +43,7 @@ import sys
 import astropy.io as aio
 import shutil
 
-import stellar_retrieval_utilities as sru 
+import stctm.stellar_retrieval_utilities as sru 
 import matplotlib.gridspec as gridspec
 
 
@@ -149,7 +149,7 @@ wv_max_um = 5.4
 
 # stellar models grid file path
 if which_star == "TRAPPIST-1":
-    stmodfile = "../R"+str(resPower_target)+"_model_grids/TRAPPIST_1"
+    stmodfile = "../../R"+str(resPower_target)+"_model_grids/TRAPPIST_1"
 
 # Add other statement for another star
 
@@ -177,20 +177,11 @@ if os.path.exists(stmodfile):
 # if not, generate it
 else:
     pdb.set_trace()
-    print("The stellar models grid does not exist !! It needs to be created with create_fixedR_grid_pymsg.py !!")
+    print("The stellar models grid does not exist !! It needs to first be \
+          created before running this file with create_fixedR_grid_pymsg.py !!")
 
     
 print("Fixed resolution model grid shape:", models_grid_fixedR.shape)
-
-#%% --- Plot observed spectrum --- #
-
-if 1:
-    
-    # plot spectrum
-    fig, ax = spec.plot()
-    # pdb.set_trace()
-    
-
 
 
 
@@ -229,16 +220,22 @@ if 1:
     this_dir = os.getcwd()+"/"
     res_dir = os.sep.join(__file__.split(os.sep)[:-2]) + "/../stellar_contamination_results/"+runname+"/"
     this_script = __file__.split(os.sep)[-1]
-    utils_script = "stellar_retrieval_utilities.py"
     script_name = "runscript.py"
     print("\nSaving files...")
     print("\nThis file:", this_dir+this_script)
     print("Saved to file:", res_dir+script_name)
     shutil.copy(this_dir+this_script, res_dir+script_name)
 
-    print("\nThis file:", this_dir+utils_script)
-    print("Saved to file:", res_dir+utils_script)
-    shutil.copy(this_dir+utils_script, res_dir+utils_script)
+
+#%% --- Plot observed spectrum --- #
+
+if 1:
+    print("Plotting fitted spectrum...")
+
+    # plot spectrum
+    fig, ax = spec.plot()    
+    fig.savefig(results_folder + "stctm_fitted_spectrum.pdf")
+
     
 #%% define parameters for emcee run
 
@@ -269,7 +266,8 @@ if 1:
 
 #%% run emcee
 if 1:
-    
+    print("Running MCMC...")
+
     sampler.run_mcmc(pos, nsteps, progress=True, store=True)
 
 
