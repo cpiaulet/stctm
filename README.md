@@ -16,7 +16,28 @@ I provide as an example for the application of *stctm* to Visit 1 of TRAPPIST-1 
 
 ## Installation
 
+You can install *stctm* from GitHub:
+
+    git clone https://github.com/cpiaulet/stctm.git
+    cd stctm
+    pip install -e .
+    
 ### Dependencies
+The dependencies of *smint* are 
+* *NumPy*
+* *scipy*
+* *emcee*
+* *corner*
+* *astropy*
+* *h5py*
+* *matplotlib*
+* *pandas*
+* *tqdm*
+
+#### Stellar models
+You may also need 
+* *pysynphot* (if you want to use their version of the stellar models interpolator), and/or
+* *pymsg* (my personal favorite - needed to run create_fixedR_grid_pymsg_template.py)
 
 ### Example
 
