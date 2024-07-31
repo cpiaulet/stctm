@@ -11,24 +11,10 @@ spots and faculae.
 
 plot the observed spectrum with the best fit + the mean
 prediction from Rackham+ (2018)
-
-v1: create a higher resolution grid and use for plotting
-v2: add as a product of post-processing the 1, 2 and 3 sigma curves
-v3: add as a product the best-fit-residual spec object + a plot of it
-v4: implement the fit of the constant scaling factor D as an option
-v5: implement returning the stellar-contamination-corrected spectrum
-v6: implement the fit of the logg of heterogeneities as an option
-v7: code cleanup + implement interpolation from a grid at 10000 resolution in the MCMC
-v8: implement option to use pymsg in the retrieval
-v9: implement saving of .py files used to the directory
-v10: implement getting corrected spectrum with the right error bars
 """
 
 #%%------------------- Import modules ------------------#
 import os
-os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
-os.environ['CRDS_PATH'] = "/Users/caroline/crds_cache"
-os.environ['PYSYN_CDBS'] = "/Users/caroline/trds"
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -49,7 +35,7 @@ import matplotlib.gridspec as gridspec
 
 #%%
 #%%
-#%% --- User inputs --- #
+#%% --- User inputs: Spectrum and labels --- #
 # input required every time
 
 #### Information on the fitted spectrum (input data)
@@ -68,7 +54,11 @@ label = instrument +" "+which_planet +" visit "+which_visit
 path_to_spec = "/Users/caroline/Research/GitHub/observations/TRAPPIST_1_b/TRAPPIST_1_b_202302_NAMELESS/Visit1_Order1And2.spec"
 spec_format = "basic" # create a new one in pytransspec.py if needed
 
-#### MCMC fitting params
+# choose suffix for all the files produced by this fit
+# res_suffix="chosen_suffix_to_identify_this_fit"
+res_suffix="TRAPPIST_1_b_example"
+
+#%% --- User inputs: MCMC fitting params
 
 nsteps=3000
 frac_burnin = 0.6
@@ -88,9 +78,6 @@ logg_phot_value = 5
 logg_het_default_source = "logg_phot" # options: "value", "logg_phot"
 logg_het_value = 5
 
-# choose suffix for all the files produced by this fit
-# res_suffix="chosen_suffix_to_identify_this_fit"
-res_suffix="TRAPPIST_1_b_example"
 
 
 #%% --- Import observed spectrum from file --- #
@@ -99,7 +86,7 @@ res_suffix="TRAPPIST_1_b_example"
 spec = ptspec.TransSpec(path_to_spec, inputtype=spec_format)
 
 
-#%% --- Stellar parameters --- #
+#%% --- User inputs: Stellar parameters --- #
 # input required if the required column names have different names in your input file
 
 if which_star == "TRAPPIST-1": ## copy this block of code for another star if needed!
@@ -135,7 +122,7 @@ param, fitparanames = sru.init_default_and_fitted_param(Teffstar, feh, loggstar,
 
 param = sru.get_derived_param(param)
 
-#%% Generate a grid of PHOENIX models over the prior range for the star
+#%% --- User inputs: Read in stellar models grid --- #
 
 ## Modify below only if you generated the grid differently
 # range of params for the grid
@@ -277,8 +264,9 @@ if 1:
     
 #%% Post-process + Get blobs
 
-sys.exit()
-#%%
+if 0:
+    sys.exit()
+#%% ----- Post-processing ----
 if 1: # chainplot
 
     
