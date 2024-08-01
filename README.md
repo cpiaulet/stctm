@@ -2,10 +2,11 @@
 *stctm* (STellar ConTamination Modeling) performs spectral retrievals on exoplanet transmission spectra assuming that the spectrum can be explained by stellar contamination alone.
 
 
-If you use this code, please cite Caroline Piaulet-Ghorayeb.
-First public release: Piaulet-Ghorayeb et al., submitted.
+If you use this code, please cite the associated Zenodo repository, with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
+If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use.
+First public release associated to: Piaulet-Ghorayeb et al., submitted.
 
-Previous uses of the code (and for now, papers to cite as its best description):
+Previous uses of the code:
 * Lim et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), on TRAPPIST-1 b
 * Roy et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...954L..52R/abstract), on GJ 9827 d
 * Benneke et al., submitted, on TRAPPIST-1 g
@@ -128,3 +129,18 @@ Please let me know if other things would be useful for you to have as default ou
 ### Changing the prior setup
 
 If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```stellar_retrieval_utilities.py```.
+
+## Citation
+
+The following entry to a bib file can be used to cite this code:
+    @misc{piaulet_stctm_2024,
+        author       = {Caroline Piaulet-Ghorayeb},
+        title        = {{stctm: Stellar contamination retrievals and modeling for small planet transmission spectra}},
+        month        = aug,
+        year         = 2024,
+        doi          = {10.5281/zenodo.13153251},
+        version      = {1.0.0},
+        publisher    = {Zenodo},
+        url          = {https://doi.org/10.5281/zenodo.13153251}
+        }
+
