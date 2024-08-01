@@ -50,18 +50,21 @@ I provide a template code snippet for how to go about computing this stellar mod
 1. Make sure that your paths are set up properly.
 Specifically, you need to have the ```MESASDK_ROOT``` and ```MSG_DIR``` environment variables defined.
 You can do this via the command-line:
+
     $ export MESASDK_ROOT=~/mesasdk
+   
 or in the code itself:
+
     import os
     os.environ['MESASDK_ROOT'] = "/home/caroline/mesasdk"
 
-2. Choose your stellar parameters.
+3. Choose your stellar parameters.
 You will need to edit the star effective temperature, Fe/H, and log g. The cleanest way to do this is to add another code block corresponding to the name of your star
 
-3. Choose the stellar grid you already downloaded.
+4. Choose the stellar grid you already downloaded.
 In my case, I downloaded the ```'sg-Goettingen-HiRes.h5'```, but you can edit this to match the grid of your choice from the sample available at http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
 
-4. Edit the grid model parameters to match your needs
+5. Edit the grid model parameters to match your needs
 The template I provide sets a range of log g values (```logg_range```), stellar effective temperature values (```Teff_range```), and a grid spacing (defined by ```loggstep``` and ```Teffstep```) that matches the default settings of the main code. You can however change these depending on your needs for the specific star-planet case. If you edit these, make sure to pay attention to the section "Setting up the stellar parameters and reading in the grid of stellar models" in the retrieval run instructions!
 
 I also compute the grid at a resolving power of 10,000 (```resPower_target```), and over a wavelength range from 0.2 to 5.4 microns (```wv_min_um``` and ```wv_max_um```), which you can also change to fit your needs.
