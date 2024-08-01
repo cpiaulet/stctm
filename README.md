@@ -51,7 +51,7 @@ I provide a template code snippet for how to go about computing this stellar mod
 Specifically, you need to have the ```MESASDK_ROOT``` and ```MSG_DIR``` environment variables defined.
 You can do this via the command-line:
 
-    $ export MESASDK_ROOT=~/mesasdk
+    export MESASDK_ROOT=~/mesasdk
    
 or in the code itself:
 
