@@ -133,6 +133,7 @@ If you wish to change the way the prior is set up on any of the fitted parameter
 ## Citation
 
 The following entry to a bib file can be used to cite this code:
+
     @misc{piaulet_stctm_2024,
         author       = {Caroline Piaulet-Ghorayeb},
         title        = {{stctm: Stellar contamination retrievals and modeling for small planet transmission spectra}},
