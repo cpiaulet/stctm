@@ -1,0 +1,8 @@
+## add ini file
+## implement Nested Sampling
+## allow to fit different instruments or visits (offsets)
+## allow to fit log g of photosphere too
+## flexible setup of priors (user can choose range, Gaussian, KDE from samples)
+## final organization (folder structure)
+## add ability to post-process a case
+## more complete documentation/API
