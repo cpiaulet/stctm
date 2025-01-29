@@ -73,8 +73,9 @@ def calc_stctm_model_and_integrate(Dlam, fspot, ffac, spec, model_wv, model_phot
     epsilon = 1./(1.-spot-fac)
     
     # integrate in bandpass
-    epsilon_int  = integ_model(spec['waveMin'],spec['waveMax'],model_wv, epsilon)
     # pdb.set_trace()
+
+    epsilon_int  = integ_model(spec['waveMin'],spec['waveMax'],model_wv, epsilon)
 
     return Dlam*epsilon_int, Dlam*epsilon
 def make_wavelength_array(wv_min_um=0.2, wv_max_um=6.0, resPower=1000, use_pymsg=True):
@@ -437,7 +438,7 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
         Dscale = np.median(spec['yval'])
         
 
-        
+    # pdb.set_trace()
     model_int, _ = calc_stctm_model_and_integrate(Dscale,param['fspot'],param['ffac'], 
                                            spec, model_wv ,model_phot_fixR, model_spot_fixR, model_fac_fixR)
     
@@ -445,7 +446,8 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
     
     return lnlk, model_int
 
-def lnprior(theta, param, fitparanames, Tphot_mean, Tphot_std, T_grid, logg_grid, Dscale_guess):
+def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para,
+            T_grid, logg_grid, Dscale_guess):
     """
     log-prior function
 
@@ -455,8 +457,16 @@ def lnprior(theta, param, fitparanames, Tphot_mean, Tphot_std, T_grid, logg_grid
         array of fitted parameter values.
     fitparanames : list of str
         list of the fitted parameters.
-    parampriors : dict
-        for each key (a param name), list of [lower_lim, upper_lim]
+    gaussparanames : list of str
+        list of the fitted parameters with Gaussian priors.
+    mean_Gauss_para : numpy array
+        array of mean parameters for all the params with Gaussian priors
+    std_Gauss_para : numpy array
+        array of std for all the params with Gaussian priors
+    T_grid: numpy 1d array
+        grid of temperatures for the grid of models (models_grid)
+    logg_grid: numpy 1d array
+        grid of loggs for the grid of models (models_grid)
     Returns
     -------
     int
@@ -469,11 +479,15 @@ def lnprior(theta, param, fitparanames, Tphot_mean, Tphot_std, T_grid, logg_grid
         param[paraname] = theta[i]
     param = get_derived_param(param)
     
-    parampriors = get_param_priors(param, Tphot_mean=Tphot_mean, Tphot_std=Tphot_std, T_grid=T_grid, logg_grid=logg_grid, Dscale_guess=Dscale_guess)
+    parampriors = get_param_priors(param, gaussparanames, mean_Gauss_para=mean_Gauss_para, 
+                                   std_Gauss_para=std_Gauss_para, T_grid=T_grid, 
+                                   logg_grid=logg_grid, Dscale_guess=Dscale_guess)
     for i, paraname in enumerate(fitparanames):
         if parampriors[paraname][0] < theta[i] <parampriors[paraname][1]:
-            if paraname=="Tphot":
-                lp = lp - 0.5*((theta[i]-Tphot_mean)**2./(Tphot_std**2.))
+            if paraname in gaussparanames:
+                ind_gaussparam = np.where(gaussparanames == paraname)[0][0]
+                # ind_gaussparam = np.where(list(gaussparanames) == paraname)
+                lp = lp - 0.5*((theta[i]-mean_Gauss_para[ind_gaussparam])**2./(std_Gauss_para[ind_gaussparam]**2.))
             else:
                 lp = lp + 0.0
         else:
@@ -482,19 +496,21 @@ def lnprior(theta, param, fitparanames, Tphot_mean, Tphot_std, T_grid, logg_grid
     if param["fspot"] + param["ffac"]>1:
         lp = - np.inf            
 
+        
+        
     return lp
 
-def lnprob(theta, spec, param, fitparanames, Teff, Teff_err, models_baseline_fixR, T_grid, logg_grid, 
+def lnprob(theta, spec, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, models_baseline_fixR, T_grid, logg_grid, 
            model_wv,models_grid_fixR):
     
-    lp = lnprior(theta, param, fitparanames, Teff, Teff_err, T_grid, logg_grid, Dscale_guess=np.median(spec["yval"]))
+    lp = lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, 
+                 T_grid, logg_grid, Dscale_guess=np.median(spec["yval"]))
     
     if not np.isfinite(lp):
         return -np.inf, np.zeros_like(np.array(spec['yval'])) * np.nan
     else:
         lnlk, model = lnlike(theta, param, fitparanames, spec, models_baseline_fixR, T_grid, 
                              logg_grid, model_wv, models_grid_fixR)
-
         lnprb = lp + lnlk
         return lnprb, model
 
@@ -534,6 +550,7 @@ def samp2bestfit(samp):
 
 def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=True, 
                                   fitThet=False, fitTphot=False, fitDscale=False,
+                                  fitlogg_phot=False,
                                   fitlogg_het=False,
                                   Dscale_guess = 7000, logg_het_guess = None):
     """
@@ -573,9 +590,11 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
     param["met"] = met
     param['logg_phot'] = logg_phot
     if logg_het_guess is None:
+        param["dlogg_het"] =0.
         param['logg_het'] = logg_phot
     else:
         param['logg_het'] = logg_het_guess
+        param["dlogg_het"] =logg_het_guess-logg_phot
     param["deltaTspot"] = -150.
     param["deltaTfac"] = 150.
     param["Tspot"] = param["Tphot"] - 150.
@@ -608,8 +627,10 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
     if fitDscale:
         fitparanames.append("Dscale")
     
+    if fitlogg_phot:
+        fitparanames.append("logg_phot")
     if fitlogg_het:
-        fitparanames.append("logg_het")
+        fitparanames.append("dlogg_het")
         
     return param, fitparanames
 
@@ -627,10 +648,12 @@ def get_derived_param(param):
     """
     param["Tspot"] = param["Tphot"] + param["deltaTspot"]
     param["Tfac"] = param["Tphot"] + param["deltaTfac"]
+    param["logg_het"] = param["logg_phot"] + param["dlogg_het"]
     return param
     
     
-def get_param_priors(param, Tphot_mean=2566., Tphot_std=26., T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
+def get_param_priors(param, gaussparanames, mean_Gauss_para=np.array([]), std_Gauss_para=np.array([]), 
+                     T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
     """
 
     Parameters
@@ -654,9 +677,20 @@ def get_param_priors(param, Tphot_mean=2566., Tphot_std=26., T_grid=[2300, 10000
     parampriors['deltaTfac'] = [100, T_grid[-1]-param["Tphot"]]
     # parampriors['deltaTspot'] = [np.min([2300.-param["Tphot"], -50.]), -50.]
     parampriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -100.]
-    parampriors['Tphot'] = [np.max([Tphot_mean - 5.*Tphot_std, T_grid[0]]), np.min([Tphot_mean + 5.*Tphot_std, T_grid[-1]])]
+    parampriors["Tphot"] = [T_grid[0], T_grid[-1]]
     parampriors["Dscale"] = [0.8*Dscale_guess, 1.2*Dscale_guess]
-    parampriors["logg_het"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
+    parampriors["logg_phot"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
+    parampriors["dlogg_het"] = [logg_grid[0]-param["logg_phot"], 0.]
+    
+
+    for par in param:
+        if par in gaussparanames:
+            ind_gaussparam = np.where(gaussparanames == par)[0][0]
+            new_prior = [np.max([mean_Gauss_para[ind_gaussparam] - 5.*std_Gauss_para[ind_gaussparam], parampriors[par][0]]), np.min([mean_Gauss_para[ind_gaussparam] + 5.*std_Gauss_para[ind_gaussparam], parampriors[par][1]])]
+            # pdb.set_trace()
+            parampriors[par] = new_prior
+    # pdb.set_trace()
+
     return parampriors
 
 def format_param_str(param, fitparanames):
@@ -1114,7 +1148,7 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
 def plot_custom_corner(samples, fitparanames, parabestfit):
     # reorder samples
     ordered_samples = np.zeros_like(samples)
-    ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "logg_het", "Tphot", "Dscale"]
+    ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "dlogg_het", "Tphot", "logg_phot","Dscale"]
     ordered_fitparanames = []
     for p in ordered_fitparanames_all:
         if p in fitparanames:
@@ -1159,6 +1193,10 @@ def get_labels_from_fitparanames(fitparanames):
             labels.append(r"$D$") 
         elif p == "logg_het":
             labels.append(r"log $g_\mathrm{het}$") 
+        elif p == "dlogg_het":
+            labels.append(r"$\Delta$ log $g_\mathrm{het}$") 
+        elif p == "logg_phot":
+            labels.append(r"log $g_\mathrm{phot}$") 
     return labels
              
 def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit, fitparanames, flat_st_ctm_models, pad=0.25):
