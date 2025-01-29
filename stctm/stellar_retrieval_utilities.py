@@ -446,7 +446,7 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
     
     return lnlk, model_int
 
-def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para,
+def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
             T_grid, logg_grid, Dscale_guess):
     """
     log-prior function
@@ -479,15 +479,16 @@ def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gau
         param[paraname] = theta[i]
     param = get_derived_param(param)
     
-    parampriors = get_param_priors(param, gaussparanames, mean_Gauss_para=mean_Gauss_para, 
-                                   std_Gauss_para=std_Gauss_para, T_grid=T_grid, 
-                                   logg_grid=logg_grid, Dscale_guess=Dscale_guess)
+    parampriors = get_param_priors(param, gaussparanames, hyperp_gausspriors=hyperp_gausspriors, 
+                                   T_grid=T_grid,logg_grid=logg_grid, Dscale_guess=Dscale_guess)
     for i, paraname in enumerate(fitparanames):
         if parampriors[paraname][0] < theta[i] <parampriors[paraname][1]:
             if paraname in gaussparanames:
                 ind_gaussparam = np.where(gaussparanames == paraname)[0][0]
+                mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
+                std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
                 # ind_gaussparam = np.where(list(gaussparanames) == paraname)
-                lp = lp - 0.5*((theta[i]-mean_Gauss_para[ind_gaussparam])**2./(std_Gauss_para[ind_gaussparam]**2.))
+                lp = lp - 0.5*((theta[i]-mean_gaussparam)**2./(std_gaussparam**2.))
             else:
                 lp = lp + 0.0
         else:
@@ -500,10 +501,10 @@ def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gau
         
     return lp
 
-def lnprob(theta, spec, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, models_baseline_fixR, T_grid, logg_grid, 
+def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors, models_baseline_fixR, T_grid, logg_grid, 
            model_wv,models_grid_fixR):
     
-    lp = lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, 
+    lp = lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
                  T_grid, logg_grid, Dscale_guess=np.median(spec["yval"]))
     
     if not np.isfinite(lp):
@@ -652,7 +653,7 @@ def get_derived_param(param):
     return param
     
     
-def get_param_priors(param, gaussparanames, mean_Gauss_para=np.array([]), std_Gauss_para=np.array([]), 
+def get_param_priors(param, gaussparanames,hyperp_gausspriors=[], 
                      T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
     """
 
@@ -686,7 +687,9 @@ def get_param_priors(param, gaussparanames, mean_Gauss_para=np.array([]), std_Ga
     for par in param:
         if par in gaussparanames:
             ind_gaussparam = np.where(gaussparanames == par)[0][0]
-            new_prior = [np.max([mean_Gauss_para[ind_gaussparam] - 5.*std_Gauss_para[ind_gaussparam], parampriors[par][0]]), np.min([mean_Gauss_para[ind_gaussparam] + 5.*std_Gauss_para[ind_gaussparam], parampriors[par][1]])]
+            mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
+            std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
+            new_prior = [np.max([mean_gaussparam - 5.*std_gaussparam, parampriors[par][0]]), np.min([mean_gaussparam + 5.*std_gaussparam, parampriors[par][1]])]
             # pdb.set_trace()
             parampriors[par] = new_prior
     # pdb.set_trace()
@@ -1327,26 +1330,3 @@ def get_and_plot_stctmcorr_spec(spec, flat_st_ctm_models, samples, fitparanames,
     return fig, ax, spec_stctmcorr
 
 
-# fit baseline, amplitude, center, std
-def gauss(x, param):
-    baseline, amp, center, stdev = param
-    in_the_exp = -0.5 * ((x-center)/stdev)**2.
-    return amp * np.exp(in_the_exp) + baseline
-
-    
-def residuals_to_gauss(param, sp=None):
-    baseline, amp, center, stdev = param
-    x = sp["wave"]
-    fct = gauss(x, param)
-    return np.sum(np.abs(fct - sp["yval"])**2.)
-
-def get_results_str(res):
-    results = dict()
-    results["baseline [ppm]"] = res.x[0]
-    results["amp [ppm]"] = res.x[1]
-    results["center [um]"] = res.x[2]
-    results["stdev [um]"] = res.x[3]
-    strprint = "\nBest model:"
-    for k in results.keys():
-        strprint = strprint + "\n"+k+":"+str(int(results[k]*100.)/100)
-    return strprint
