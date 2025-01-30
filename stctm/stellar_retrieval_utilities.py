@@ -446,7 +446,8 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
     
     return lnlk, model_int
 
-def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
+def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+                               fitLogfhet, hyperp_logpriors,
             T_grid, logg_grid, Dscale_guess):
     """
     log-prior function
@@ -480,6 +481,7 @@ def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
     param = get_derived_param(param)
     
     parampriors = get_param_priors(param, gaussparanames, hyperp_gausspriors=hyperp_gausspriors, 
+                                   fitLogfhet=fitLogfhet, hyperp_logpriors=hyperp_logpriors,
                                    T_grid=T_grid,logg_grid=logg_grid, Dscale_guess=Dscale_guess)
     for i, paraname in enumerate(fitparanames):
         if parampriors[paraname][0] < theta[i] <parampriors[paraname][1]:
@@ -501,10 +503,12 @@ def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
         
     return lp
 
-def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors, models_baseline_fixR, T_grid, logg_grid, 
+def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+           fitLogfhet, hyperp_logpriors, models_baseline_fixR, T_grid, logg_grid, 
            model_wv,models_grid_fixR):
     
     lp = lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+                 fitLogfhet,hyperp_logpriors,
                  T_grid, logg_grid, Dscale_guess=np.median(spec["yval"]))
     
     if not np.isfinite(lp):
@@ -547,12 +551,24 @@ def samp2bestfit(samp):
 
     return bestfit, ind_bestfit, ind
 
+def BIC(chi2,nDataPoints,nPara):
+    '''
+    Adapted from auxbenneke/utilities.py
+    Liddle, A.R., 2007. Information criteria for astrophysical model selection. Monthly Notices of the Royal Astronomical Society: Letters 377, L74–L78. https://doi.org/10.1111/j.1745-3933.2007.00306.x
+    The BIC assumes that the data points are independent and identically distributed, which may or may not be valid depending on the data set under consideration
+    '''
+    return chi2 + nPara*np.log(nDataPoints)
+
+
+
 #%% define default param, fitparanames, parampriors
 
-def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=True, 
+def init_default_and_fitted_param(Tphot, met, logg_phot,
+                                  fitspot=True, fitfac=True, 
                                   fitThet=False, fitTphot=False, fitDscale=False,
                                   fitlogg_phot=False,
                                   fitlogg_het=False,
+                                  fitLogfhet=False,
                                   Dscale_guess = 7000, logg_het_guess = None):
     """
     
@@ -606,13 +622,24 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
         
     if fitspot:       
         param["fspot"] = 0.02
-        fitparanames.append("fspot")
+        if fitLogfhet is False:
+            fitparanames.append("fspot")
+        else:
+            param["log_fspot"] = np.log10(param["fspot"])
+            fitparanames.append("log_fspot")
+
     else:
         param["fspot"] = 0.    
+    
     if fitfac:
-        
         param["ffac"] = 0.05
-        fitparanames.append("ffac")
+        if fitLogfhet is False:
+            fitparanames.append("ffac")
+        else:
+            param["log_ffac"] = np.log10(param["ffac"])
+            fitparanames.append("log_ffac") 
+            
+    
     else:
         param["ffac"] = 0.
     
@@ -627,6 +654,7 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
 
     if fitDscale:
         fitparanames.append("Dscale")
+        
     
     if fitlogg_phot:
         fitparanames.append("logg_phot")
@@ -650,10 +678,17 @@ def get_derived_param(param):
     param["Tspot"] = param["Tphot"] + param["deltaTspot"]
     param["Tfac"] = param["Tphot"] + param["deltaTfac"]
     param["logg_het"] = param["logg_phot"] + param["dlogg_het"]
+    if "log_fspot" in param.keys():
+        param["fspot"] = 10**param["log_fspot"] 
+    if "log_ffac" in param.keys():
+        param["ffac"] = 10**param["log_ffac"] 
     return param
     
-    
+
+# def get_prior(allpriors, paraname, default, user_setting):
+#     if 
 def get_param_priors(param, gaussparanames,hyperp_gausspriors=[], 
+                     fitLogfhet=False, hyperp_logpriors=[],
                      T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
     """
 
@@ -667,23 +702,35 @@ def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
     dictionary of parameter priors in the form of [low, high] for uniform priors.
 
     """
-    parampriors = dict()
-    # parampriors['ffac'] = [0., 1.]
-    parampriors['ffac'] = [0., 0.5]
-    # parampriors['fspot'] = [0., 1.]
-    # parampriors['fspot'] = [0.01, 0.04]
-    parampriors['fspot'] = [0., 0.5]
-    # parampriors['deltaTfac'] = [50, 1000.]
-    # parampriors['deltaTfac'] = [100, 1000.]
-    parampriors['deltaTfac'] = [100, T_grid[-1]-param["Tphot"]]
-    # parampriors['deltaTspot'] = [np.min([2300.-param["Tphot"], -50.]), -50.]
-    parampriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -100.]
-    parampriors["Tphot"] = [T_grid[0], T_grid[-1]]
-    parampriors["Dscale"] = [0.8*Dscale_guess, 1.2*Dscale_guess]
-    parampriors["logg_phot"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
-    parampriors["dlogg_het"] = [logg_grid[0]-param["logg_phot"], 0.]
     
+    defaultpriors = dict()
 
+    defaultpriors['ffac'] = [0., 0.5]
+    defaultpriors['fspot'] = [0., 0.5]
+    defaultpriors['deltaTfac'] = [100, T_grid[-1]-param["Tphot"]]
+    defaultpriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -100.]
+    defaultpriors["Tphot"] = [T_grid[0], T_grid[-1]]
+    defaultpriors["Dscale"] = [0.8*Dscale_guess, 1.2*Dscale_guess]
+    defaultpriors["logg_phot"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
+    defaultpriors["dlogg_het"] = [logg_grid[0]-param["logg_phot"], 0.]
+    
+    parampriors = dict()
+    
+    # check parameters for log priors
+    allparanames = ['ffac',"fspot","deltaTfac","deltaTspot", "Tphot", "Dscale","logg_phot","dlogg_het"]
+    for par in allparanames:
+        if par not in ["fspot", "ffac"]:
+            parampriors[par] = defaultpriors[par]
+        else:
+            if fitLogfhet:
+                lowlim = hyperp_logpriors[0]
+                upplim = hyperp_logpriors[1]
+                parampriors["log_"+par] = [lowlim,upplim]
+            else:
+                parampriors[par] = defaultpriors[par]
+
+            
+        
     for par in param:
         if par in gaussparanames:
             ind_gaussparam = np.where(gaussparanames == par)[0][0]
@@ -767,6 +814,25 @@ def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparan
     
     parabestfit = np.array(bestfit["MaxLike"][2:])
     return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
+
+def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, results_folder, runname, save_fit=True):
+    # create a dictionary that collates all the best-fit information
+    print("Saving stats on the best fit...")
+    bestfit_stats = dict()
+    best_model = flat_st_ctm_models[ind_bestfit]
+    nPara = len(fitparanames)
+    nDataPoints = len(spec["yval"])
+    n_dof = nDataPoints - nPara
+    bestfit_stats["ind_postburnin"] = ind_bestfit
+    bestfit_stats["chi2"] = np.sum((spec['yval']-best_model)**2./spec["yerrLow"]**2.)
+    bestfit_stats["redchi2"] = bestfit_stats["chi2"]/n_dof
+    bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"] ,nDataPoints,nPara)
+    t_bestfit_stats = table.Table([bestfit_stats])
+    
+    if save_fit:
+        print("Writing to file...")
+        aio.ascii.write(t_bestfit_stats, results_folder+"stctm_bestfit_stats_"+runname+'.csv', format='csv', overwrite=True)
+
 #%% Plotting
 
 def setAxesFontSize(ax,fontsize):
@@ -914,7 +980,7 @@ def get_para_for_postprocess(param, fitparanames, bestfit_params_and_quantiles_t
     returns a dict of temperatures and het. fractions
     """
     para_stcontmodel = dict()
-    allpara = ["Tspot" , "Tphot", "Tfac", "fspot", "ffac"]
+    allpara = ["Tspot" , "Tphot", "Tfac", "fspot", "ffac", "log_fspot", "log_ffac"]
     for p in allpara:
         if p in fitparanames:
             if p[0] == "d":
@@ -1140,18 +1206,22 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
     """
     hist_kwargs["color"] = plotparams["hist_color"]
     color = plotparams["hist_color"]
-    fig = corner.corner(samples, labels=plotparams["labels"], 
-                        plot_datapoints=plot_datapoints, smooth=smooth,
-                        show_titles=show_titles, quantiles=quantiles,
-                        title_kwargs=title_kwargs, color=color,
-                        hist_kwargs=hist_kwargs, range=rg, 
-                        levels=levels, **kwargs)
+    try:
+        fig = corner.corner(samples, labels=plotparams["labels"], 
+                            plot_datapoints=plot_datapoints, smooth=smooth,
+                            show_titles=show_titles, quantiles=quantiles,
+                            title_kwargs=title_kwargs, color=color,
+                            hist_kwargs=hist_kwargs, range=rg, 
+                            levels=levels, **kwargs)
+    except:
+        print("Error in corner plot!")
+        pdb.set_trace()
     return fig
 
 def plot_custom_corner(samples, fitparanames, parabestfit):
     # reorder samples
     ordered_samples = np.zeros_like(samples)
-    ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "dlogg_het", "Tphot", "logg_phot","Dscale"]
+    ordered_fitparanames_all = ["fspot", "log_fspot","deltaTspot", "ffac", "log_ffac","deltaTfac", "dlogg_het", "Tphot", "logg_phot","Dscale"]
     ordered_fitparanames = []
     for p in ordered_fitparanames_all:
         if p in fitparanames:
@@ -1167,6 +1237,7 @@ def plot_custom_corner(samples, fitparanames, parabestfit):
     plotparams = dict()
     plotparams["hist_color"] = "coral"
     plotparams["labels"] = get_labels_from_fitparanames(ordered_fitparanames)
+    # pdb.set_trace()
 
     fig = plot_corner(ordered_samples, plotparams, smooth=0.2, fill_contours=True, 
                       truths = ordered_parabestfit, truth_color="k")
@@ -1186,6 +1257,10 @@ def get_labels_from_fitparanames(fitparanames):
             labels.append(r"$f_\mathrm{spot}$")
         elif p == "ffac":
             labels.append(r"$f_\mathrm{fac}$")        
+        elif p == "log_fspot":
+            labels.append(r"$\log_{10} f_\mathrm{spot}$")
+        elif p == "log_ffac":
+            labels.append(r"$\log_{10} f_\mathrm{fac}$") 
         elif p == "deltaTfac":
             labels.append(r"$\Delta T_\mathrm{fac}$")           
         elif p == "deltaTspot":
