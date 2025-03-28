@@ -1,31 +1,20 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Jun 13, 2024
 
 @author: cpiaulet
+Definition of the TransSpec object
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
-import astropy.io as aio
 import stctm.stellar_retrieval_utilities as sru
 
-import pandas as pd
-import os        
 from astropy.table import Table
-import astropy.io.fits as pf
 
-from scipy.optimize import minimize
-from scipy import stats
-
-import collections
 from copy import deepcopy
 
 import warnings
-
-jdref=2450000
-big=1e10
 
 
 #%%
@@ -49,18 +38,21 @@ class TransSpec(Table):
             Color for plotting. The default is "k".
         waveunit : str, optional
             Unit of the wavelength axis. The default is "um".
+        header_start : int, optional
+            Starting line for header in input file if `inputtype` is set to 'wavemicrons'.
 
         Returns
         -------
-        pyTransSpec object
+        TransSpec object
 
         """
 
         
         if inputtype=='basic':
             table=Table.read(inputpath,format='ascii.ecsv',delimiter=',')
+
             super(TransSpec,self).__init__(table)
-            self["wave"] = self["wave"]*1e3
+            self["wave"] = self["wave"]*1e3 # convert to microns from millimeters
             self["waveMin"] = self["waveMin"]*1e3
             self["waveMax"] = self["waveMax"]*1e3
             self.sort(keys=["waveMin"])
@@ -72,6 +64,7 @@ class TransSpec(Table):
             self.meta['waveunit']=waveunit
             self.meta['label']=label
             self.meta['color']=color
+
         elif inputtype=='wavemicrons':
             table=Table.read(inputpath,format='ascii.ecsv',header_start=header_start)
             
@@ -90,6 +83,26 @@ class TransSpec(Table):
             self.meta['color']=color
 
     def binning(self,binFac=0,resPower=0,iwave=None):
+        """
+        adapted from auxbenneke/utilities.py binning function
+        Bins the transmission spectrum.
+
+        Parameters
+        ----------
+        binFac : int, optional
+            If >0, bins by averaging every binFac points. Not used if `iwave` provided.
+            resPower : float, optional
+            Target spectral resolution power. If >0, spec is adaprively binned
+            to achieve approximately this resolution
+        iwave : list of float, optional
+            Explicit wavelength bin edges. If provided, overrides binFac.
+            Each bin is defined between iwave[i] and iwave[i+1].
+
+        Returns
+        -------
+        spec : TransSpec
+            A new TransSpec object containing the binned spectrum.
+        """
         
         if iwave is not None:
         
@@ -184,15 +197,55 @@ class TransSpec(Table):
         
     def plot(self,ax=None,title=None,label=None,
              xscale='linear',figsize=None,ylim=None,showxerr=True,xticks=None,xticklabels=None,
-             markercolor='white',quantityToPlot=['yval','yerrLow','yerrUpp'],showcaps=True,color="k",ls="",
+             color="k",ls="",
              marker="o",capsize=0, alpha=0.9,markeredgecolor="k", markerfacecolor="w",
              **kwargs):
         """
         Plot transmission spectrum
 
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            Axes object to plot on. If None, a new figure is created. Default is None.
+        title : str, optional
+            Title of the plot. Default is None.
+        label : str, optional
+            Label for the data series (used in legend). Defaults to object's meta label if None.
+        xscale : str, optional
+            X-axis scale: 'linear' or 'log'. Default is 'linear'.
+        figsize : tuple, optional
+            Size of the figure if a new one is created. Default is None.
+        ylim : tuple, optional
+            Y-axis limits. Default is None.
+        showxerr : bool, optional
+            Whether to display horizontal error bars. Default is True.
+        xticks : list, optional
+            Custom x-tick locations. Default is None.
+        xticklabels : list, optional
+            Custom x-tick labels. Default is None.
+        color : str, optional
+            Color of the plot line and markers. Default is "k" (black).
+        ls : str, optional
+            Line style. Default is "" (no line).
+        marker : str, optional
+            Marker symbol. Default is "o" (circle).
+        capsize : float, optional
+            Size of the caps on error bars. Default is 0.
+        alpha : float, optional
+            Transparency level. Default is 0.9.
+        markeredgecolor : str, optional
+            Edge color of markers. Default is "k" (black).
+        markerfacecolor : str, optional
+            Fill color of markers. Default is "w" (white).
+        **kwargs : dict
+            Additional keyword arguments passed to `ax.errorbar`.
+
         Returns
         -------
-        fig, ax
+        fig : matplotlib.figure.Figure
+            The figure object (if created).
+        ax : matplotlib.axes.Axes
+            The axes object the spectrum is plotted on.
 
         """
 
@@ -252,6 +305,20 @@ class TransSpec(Table):
 #%%
 
 def centersToEdges(centers):
+    """
+    from auxbenneke/utilities.py: convert bin centers to bin edges
+    Parameters
+    ----------
+    centers : array-like
+        List of bin centers
+
+
+    Returns
+    -------
+    edges : array
+        List of bin edges corresponding to the input bin centers.
+        The first and last edges are extrapolated by half the bin width.
+    """
     edges=0.5*(centers[0:-1]+centers[1:])
     edges=np.r_[ edges[0]-(edges[1]-edges[0]), edges , edges[-1]+(edges[-1]-edges[-2])   ];
     return edges

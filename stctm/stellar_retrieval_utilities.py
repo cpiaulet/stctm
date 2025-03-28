@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed May 10 12:34:45 2023
@@ -8,45 +7,38 @@ Created on Wed May 10 12:34:45 2023
 Stellar retrieval utility functions
 """
 
-import os
-os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
-os.environ['CRDS_PATH'] = "/Users/caroline/crds_cache"
-os.environ['PYSYN_CDBS'] = "/Users/caroline/trds"
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.constants as const
-from astropy.io import fits
-from scipy.optimize import minimize
 import pdb
-import pkg_resources
 import emcee
 import corner
 import pysynphot as psp
 import astropy.table as table
 import h5py
-import random as rdm
 import matplotlib.ticker as ticker
-import matplotlib.colors as mcolors
-
-import matplotlib.dates as mdates
-from matplotlib.ticker import FuncFormatter
 from copy import deepcopy
-import sys
 import pandas as pd
 import astropy.io as aio
-import time
 import matplotlib.gridspec as gridspec
-from astropy.convolution import convolve, Box1DKernel,  Gaussian1DKernel, Trapezoid1DKernel
+from astropy.convolution import convolve,  Gaussian1DKernel
 
-#%% --- Constants --- #
+##  --- Constants --- #
 
 c = const.c.value
 h = const.h.value
 
-#%% --- Helper functions --- #
+##  --- Helper functions --- #
 
-# integrate model in wavelength range
 def integ_model(lam_min,lam_max,wave,F):
+    """
+    Integrate model in wavelength range
+    :param lam_min: lower edge of wavelength range
+    :param lam_max: upper edge of wavelength range
+    :param wave: wavelength array
+    :param F: flux array
+    :return: integral of F over the wavelength range
+    """
     F_int = []
     dwave=wave[1:]-wave[:-1]
 
@@ -58,15 +50,35 @@ def integ_model(lam_min,lam_max,wave,F):
 #        F_int.append(np.trapz(F[ind],x=wave[ind]))
     return np.array(F_int)
 
-# model for observed transit depth (Rackham+2018)
-
 def Dlam_obs(Dlam,fspot,ffac,Fphot_int,Fspot_int,Ffac_int):
+    """
+    model for observed transit depth (Rackham+2018)
+    :param Dlam: bare-rock transit depth
+    :param fspot: spot covering fraction
+    :param ffac: facula covering fraction
+    :param Fphot_int: photosphere flux (int. in each bin)
+    :param Fspot_int: spot flux (int. in each bin)
+    :param Ffac_int: faculae flux (int. in each bin)
+    :return: contaminated transit depth
+    """
     spot    = fspot*(1.-(Fspot_int/Fphot_int))
     fac     = ffac*(1.-(Ffac_int/Fphot_int))
     epsilon = 1./(1.-spot-fac)
     return Dlam*epsilon
 
 def calc_stctm_model_and_integrate(Dlam, fspot, ffac, spec, model_wv, model_phot_fixR, model_spot_fixR, model_fac_fixR):
+    """
+    Same as Dlam_obs but returns both the model integrated in each obs. bandpass and the fixed-R model
+    :param Dlam: bare-rock transit depth
+    :param fspot: spot covering fraction
+    :param ffac: facula covering fraction
+    :param spec: planet spectrum
+    :param model_wv: model wavelength array
+    :param model_phot_fixR: photosphere model at fixed R
+    :param model_spot_fixR: spot model at fixed R
+    :param model_fac_fixR: faculae model at fixed R
+    :return: model integrated in each obs. bandpass, the fixed-R contaminated transit depth model
+    """
     # calculate stellar contamination model
     spot    = fspot*(1.-(model_spot_fixR/model_phot_fixR))
     fac     = ffac*(1.-(model_fac_fixR/model_phot_fixR))
@@ -78,10 +90,9 @@ def calc_stctm_model_and_integrate(Dlam, fspot, ffac, spec, model_wv, model_phot
     epsilon_int  = integ_model(spec['waveMin'],spec['waveMax'],model_wv, epsilon)
 
     return Dlam*epsilon_int, Dlam*epsilon
+
 def make_wavelength_array(wv_min_um=0.2, wv_max_um=6.0, resPower=1000, use_pymsg=True):
     """
-    
-
     Parameters
     ----------
     wv_min_um : float, optional
@@ -112,8 +123,6 @@ def make_wavelength_array(wv_min_um=0.2, wv_max_um=6.0, resPower=1000, use_pymsg
 def load_phoenix_model(Teff, M, logG, wv_target=None, wv_edges=None, resPower_target=None, 
                        wv_min_um=0.2, wv_max_um=6.0, use_pymsg = True, pymsg_specgrid=None):
     """
-    
-
     Parameters
     ----------
     Teff : float
@@ -124,6 +133,8 @@ def load_phoenix_model(Teff, M, logG, wv_target=None, wv_edges=None, resPower_ta
         Star log g.
     wv_target : array, optional
         Target wavelength array. The default is None.
+    wv_edges : array, optional
+        Wavelength edges for pymsg. The default is None.
     resPower_target : float, optional
         Target wavelength array resolving power
     wv_min_um : float, optional
@@ -132,6 +143,8 @@ def load_phoenix_model(Teff, M, logG, wv_target=None, wv_edges=None, resPower_ta
         max wavelength of the array, in um. The default is 6.0.
     use_pymsg : bool, optional
         whether or not to use pymsg to load the model
+    pymsg_specgrid : msg.SpecGrid() object
+        pymsg grid already loaded from file name
     Returns
     -------
     wavePhoenix : array
@@ -184,6 +197,9 @@ def load_phoenix_model(Teff, M, logG, wv_target=None, wv_edges=None, resPower_ta
 def convertWaveToSi(inp,unit1):
     """ 
     adapted from auxbenneke/radutils.py
+    inp: input array
+    unit1: input unit (str)
+    returns: wavelength [m], f [Hz], wavenumber [1/m]
     """
 
     # WavelengthUnit
@@ -218,9 +234,9 @@ def convertWaveToSi(inp,unit1):
     else:
         print('Input Unit Error!!!')
 
-    ##Now wave is in meters
-    ##Now f is in 1/s
-    ##Now wavenumber is in meters**-1
+    #**Now wave is in meters
+    #**Now f is in 1/s
+    #**Now wavenumber is in meters**-1
 
     return wave, f, wavenumber
 
@@ -228,12 +244,16 @@ def convertWaveToSi(inp,unit1):
 def convertWave(inp,unit1,unit2):
     """ 
     adapted from auxbenneke/radutils.py
+    inp: input array
+    unit1: input unit (str)
+    unit2: output unit (str)
+    returns: inp array converted to unit2
     """
     wave, f, wavenumber = convertWaveToSi(inp,unit1)
 
-    ##Now wave is in meters
-    ##Now f is in 1/s
-    ##Now wavenumber is in meters**-1
+    #**Now wave is in meters
+    #**Now f is in 1/s
+    #**Now wavenumber is in meters**-1
 
     # WavelengthUnit
     if unit2=='Hz':     #Frequency
@@ -258,19 +278,25 @@ def convertWave(inp,unit1,unit2):
 def convertIntensity(Iin,LambdaInput,InputUnit='W/(m**2*Hz)',WavelengthUnit='um',OutputUnit='W/(m**2*um)'):
     """ 
     adapted from auxbenneke/radutils.py
+    Iin: input intensity
+    LambdaInput: input wavelength
+    InputUnit: input unit (str)
+    WavelengthUnit: input wavelength unit (str)
+    OutputUnit: output unit (str)
+    Returns: Iout=Iin converted to OutputUnit
     """
-    ##Unit converter for flux and intensity
-    ##Ex: Iout = ConvertIntensityUnits(Iin,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
-    ##    plot(wave*1e6,ConvertIntensityUnits(IncidentFlux,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
-    ##    trapz(wave*1e6,ConvertIntensityUnits(IncidentFlux,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
+    #**Unit converter for flux and intensity
+    #**Ex: Iout = ConvertIntensityUnits(Iin,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
+    #**    plot(wave*1e6,ConvertIntensityUnits(IncidentFlux,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
+    #**    trapz(wave*1e6,ConvertIntensityUnits(IncidentFlux,'W/(m**2*Hz)','W/(m**2*um)',wave,'m'
 
 
     wave, f, wavenumber = convertWaveToSi(LambdaInput,WavelengthUnit)
 
 
-    ##Now wave is in meters
-    ##Now f is in 1/s
-    ##Now wavenumber is in meters**-1
+    #**Now wave is in meters
+    #**Now f is in 1/s
+    #**Now wavenumber is in meters**-1
 
 
     #Convert Iin into 'W/(m**2*Hz)'
@@ -365,7 +391,7 @@ def convertIntensity(Iin,LambdaInput,InputUnit='W/(m**2*Hz)',WavelengthUnit='um'
 
     return Iout   
 
-#%% --- Using emcee to find the optimal ffac and fspot--- #
+##  --- Using emcee to find the optimal ffac and fspot--- #
 
    
 
@@ -379,10 +405,9 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
         array of fitted parameter values.
     param : dict
         dictionary of values for all the model parameters.
-    # param: Tphot, met, logg, Tspot, fspot, Tfac, ffac
     fitparanames : list of str
         list of the fitted parameters.
-    spec : pyTransSpec object 
+    spec : TransSpec object 
         (planet atmosphere observations in transmission)
     models_baseline : list of arrays
         baseline models for the photosphere, spots, and faculae at fixed R.
@@ -447,8 +472,8 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
     return lnlk, model_int
 
 def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
-                               fitLogfhet, hyperp_logpriors,
-            T_grid, logg_grid, Dscale_guess):
+                               fitLogfSpotFac, hyperp_logpriors,
+                                T_grid, logg_grid, Dscale_guess):
     """
     log-prior function
 
@@ -456,18 +481,24 @@ def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
     ----------
     theta : array
         array of fitted parameter values.
+    param : dict
+        dictionary of values for all the model parameters.
     fitparanames : list of str
         list of the fitted parameters.
     gaussparanames : list of str
         list of the fitted parameters with Gaussian priors.
-    mean_Gauss_para : numpy array
-        array of mean parameters for all the params with Gaussian priors
-    std_Gauss_para : numpy array
-        array of std for all the params with Gaussian priors
+    hyperp_gausspriors : list of lists
+        list of [mean, std] for all the Gauss prios
+    fitLogfSpotFac : [True/False, True/False]
+        first item is True if fspot is fitted in log space, second item is True if ffac is fitted in log space.
+    hyperp_logpriors : list of lists
+        list of [min, max] for all the log priors
     T_grid: numpy 1d array
         grid of temperatures for the grid of models (models_grid)
     logg_grid: numpy 1d array
         grid of loggs for the grid of models (models_grid)
+    Dscale_guess: float
+        initial guess for Dscale
     Returns
     -------
     int
@@ -481,7 +512,7 @@ def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
     param = get_derived_param(param)
     
     parampriors = get_param_priors(param, gaussparanames, hyperp_gausspriors=hyperp_gausspriors, 
-                                   fitLogfhet=fitLogfhet, hyperp_logpriors=hyperp_logpriors,
+                                   fitLogfSpotFac=fitLogfSpotFac, hyperp_logpriors=hyperp_logpriors,
                                    T_grid=T_grid,logg_grid=logg_grid, Dscale_guess=Dscale_guess)
     for i, paraname in enumerate(fitparanames):
         if parampriors[paraname][0] < theta[i] <parampriors[paraname][1]:
@@ -504,11 +535,46 @@ def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
     return lp
 
 def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors, 
-           fitLogfhet, hyperp_logpriors, models_baseline_fixR, T_grid, logg_grid, 
+           fitLogfSpotFac, hyperp_logpriors, models_baseline_fixR, T_grid, logg_grid, 
            model_wv,models_grid_fixR):
+    """
+    log-probability function
+        Parameters
+    ----------
+    theta : array
+        array of fitted parameter values.
+    spec : TransSpec object
+        (planet atmosphere observations in transmission)
+    param : dict
+        dictionary of values for all the model parameters.
+    fitparanames : list of str
+        list of the fitted parameters.
+    gaussparanames : list of str
+        list of the fitted parameters with Gaussian priors.
+    hyperp_gausspriors : list of lists
+        list of [mean, std] for all the Gauss prios
+    fitLogfSpotFac : [True/False, True/False]
+        first item is True if fspot is fitted in log space, second item is True if ffac is fitted in log space.
+    hyperp_logpriors : list of lists
+        list of [min, max] for all the log priors
+    models_baseline_fixR : list of arrays
+        baseline models for the photosphere, spots, and faculae at fixed R.
+    T_grid: numpy 1d array
+        grid of temperatures for the grid of models (models_grid)
+    logg_grid: numpy 1d array
+        grid of loggs for the grid of models (models_grid)
+    model_wv: numpy 1d array
+        wavelength array of fixed R models
+    models_grid_fixR: 3d array
+        grid of models with varying temperatures and loggs, at fixed R
+    Returns
+    -------
+    int
+        ln probability value for parameters theta.
+    """
     
     lp = lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
-                 fitLogfhet,hyperp_logpriors,
+                 fitLogfSpotFac,hyperp_logpriors,
                  T_grid, logg_grid, Dscale_guess=np.median(spec["yval"]))
     
     if not np.isfinite(lp):
@@ -521,7 +587,9 @@ def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors,
 
 def samp2bestfit(samp):
     """
-    Make pandas dataframe containing statistical info on the posterior
+    samp: pandas dataframe containing the posterior samples
+    ---
+    Returns: pandas dataframe containing statistical info on the posterior
     """
     
     x50 = samp.quantile(0.50)
@@ -553,6 +621,8 @@ def samp2bestfit(samp):
 
 def BIC(chi2,nDataPoints,nPara):
     '''
+    Calculate BIC
+
     Adapted from auxbenneke/utilities.py
     Liddle, A.R., 2007. Information criteria for astrophysical model selection. Monthly Notices of the Royal Astronomical Society: Letters 377, L74–L78. https://doi.org/10.1111/j.1745-3933.2007.00306.x
     The BIC assumes that the data points are independent and identically distributed, which may or may not be valid depending on the data set under consideration
@@ -561,14 +631,14 @@ def BIC(chi2,nDataPoints,nPara):
 
 
 
-#%% define default param, fitparanames, parampriors
+##  define default param, fitparanames, parampriors
 
 def init_default_and_fitted_param(Tphot, met, logg_phot,
                                   fitspot=True, fitfac=True, 
                                   fitThet=False, fitTphot=False, fitDscale=False,
                                   fitlogg_phot=False,
                                   fitlogg_het=False,
-                                  fitLogfhet=False,
+                                  fitLogfSpotFac=[0,0],
                                   Dscale_guess = 7000, logg_het_guess = None):
     """
     
@@ -590,10 +660,14 @@ def init_default_and_fitted_param(Tphot, met, logg_phot,
         True to fit stellar photosphere temperature
     fitDscale : bool
         True to fit for the scaling factor D. Default is False.
+    fitlogg_phot : bool
+        True to fit for logg_phot. Default is False.
     fitlogg_het : bool
         True to fit for logg_het. Default is False.
+    fitLogfSpotFac : list of bool
+        list of two bools, first is True if fspot is fitted in log space, second is True if ffac is fitted in log space.
     Dscale_guess : float
-        Initial guess for Dscale 
+        Initial guess for Dscale parameter. Default is 7000.
     logg_het_guess : float
         Initial guess for logg_het. Default is None.
     Returns
@@ -619,27 +693,23 @@ def init_default_and_fitted_param(Tphot, met, logg_phot,
     param["Dscale"] = Dscale_guess
     
 
-        
-    if fitspot:       
+    if fitspot:
         param["fspot"] = 0.02
-        if fitLogfhet is False:
-            fitparanames.append("fspot")
-        else:
+        if fitLogfSpotFac[0]:
             param["log_fspot"] = np.log10(param["fspot"])
             fitparanames.append("log_fspot")
-
+        else:            
+            fitparanames.append("fspot")
     else:
         param["fspot"] = 0.    
-    
+
     if fitfac:
         param["ffac"] = 0.05
-        if fitLogfhet is False:
-            fitparanames.append("ffac")
-        else:
+        if fitLogfSpotFac[1]:
             param["log_ffac"] = np.log10(param["ffac"])
-            fitparanames.append("log_ffac") 
-            
-    
+            fitparanames.append("log_ffac")
+        else:            
+            fitparanames.append("ffac")
     else:
         param["ffac"] = 0.
     
@@ -665,7 +735,7 @@ def init_default_and_fitted_param(Tphot, met, logg_phot,
 
 def get_derived_param(param):
     """
-
+    Get derived model parameters from the fitted parameters
     Parameters
     ----------
     param : dict
@@ -673,7 +743,7 @@ def get_derived_param(param):
 
     Returns
     -------
-    param with Tspot and Tfac updated
+    param with Tspot, Tfac, fspot, ffac updated
     """
     param["Tspot"] = param["Tphot"] + param["deltaTspot"]
     param["Tfac"] = param["Tphot"] + param["deltaTfac"]
@@ -685,17 +755,29 @@ def get_derived_param(param):
     return param
     
 
-# def get_prior(allpriors, paraname, default, user_setting):
-#     if 
-def get_param_priors(param, gaussparanames,hyperp_gausspriors=[], 
-                     fitLogfhet=False, hyperp_logpriors=[],
+def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
+                     fitLogfSpotFac=[False,False], hyperp_logpriors=[],
                      T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
     """
 
     Parameters
     ----------
     param : dict
-        dictionary of default param values .
+        dictionary of default param values.
+    gaussparanames : list of str
+        list of the fitted parameters with Gaussian priors.
+    hyperp_gausspriors : list of lists
+        list of [mean, std] for all the Gauss prios
+    fitLogfSpotFac : list of bool
+        list of two bools, first is True if fspot is fitted in log space, second is True if ffac is fitted in log space.
+    hyperp_logpriors : list of lists
+        list of [min, max] for all the log priors
+    T_grid: numpy 1d array
+        grid of temperatures for the grid of models (models_grid)
+    logg_grid: numpy 1d array
+        grid of loggs for the grid of models (models_grid)
+    Dscale_guess: float
+        Initial guess for Dscale parameter. Default is 7000.
 
     Returns
     -------
@@ -705,8 +787,8 @@ def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
     
     defaultpriors = dict()
 
-    defaultpriors['ffac'] = [0., 0.5]
-    defaultpriors['fspot'] = [0., 0.5]
+    defaultpriors['ffac'] = [0., 0.9]
+    defaultpriors['fspot'] = [0., 0.9]
     defaultpriors['deltaTfac'] = [100, T_grid[-1]-param["Tphot"]]
     defaultpriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -100.]
     defaultpriors["Tphot"] = [T_grid[0], T_grid[-1]]
@@ -722,13 +804,22 @@ def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
         if par not in ["fspot", "ffac"]:
             parampriors[par] = defaultpriors[par]
         else:
-            if fitLogfhet:
-                lowlim = hyperp_logpriors[0]
-                upplim = hyperp_logpriors[1]
-                parampriors["log_"+par] = [lowlim,upplim]
+            if par == "fspot":
+                if fitLogfSpotFac[0]:
+                    lowlim = hyperp_logpriors[0]
+                    upplim = hyperp_logpriors[1]
+                    parampriors["log_"+par] = [lowlim,upplim]
+                else:
+                    parampriors[par] = defaultpriors[par]
+            elif par == "ffac":
+                if fitLogfSpotFac[1]:
+                    lowlim = hyperp_logpriors[0]
+                    upplim = hyperp_logpriors[1]
+                    parampriors["log_"+par] = [lowlim,upplim]
+                else:
+                    parampriors[par] = defaultpriors[par]
             else:
                 parampriors[par] = defaultpriors[par]
-
             
         
     for par in param:
@@ -737,13 +828,21 @@ def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
             mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
             std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
             new_prior = [np.max([mean_gaussparam - 5.*std_gaussparam, parampriors[par][0]]), np.min([mean_gaussparam + 5.*std_gaussparam, parampriors[par][1]])]
-            # pdb.set_trace()
             parampriors[par] = new_prior
-    # pdb.set_trace()
 
     return parampriors
 
 def format_param_str(param, fitparanames):
+    """
+    Format the fitted parameters into a string for printing
+    param : dict
+        dictionary of default param values.
+    fitparanames : list of str
+        list of the fitted parameters.
+    ---
+    :return: str
+    String to be printed
+    """
     param = get_derived_param(param)
 
     str1 = "Fitted params: "+str(fitparanames)+"\n"
@@ -753,15 +852,34 @@ def format_param_str(param, fitparanames):
     str1 = str1 + "fspot=" + str(int(param["fspot"]*10000.)/10000.) + " ffac="+str(int(param["ffac"]*10000)/10000.)
     return str1
 
-#%% Make any stellar contamination model
+##  Make any stellar contamination model
 
 def load_phoenix_models_from_param(param, resPower_target=10000, use_pymsg=True, pymsg_specgrid=None):
+    """
+    Load the Phoenix models for the photosphere, spots, and faculae from the parameter values
+
+    param : dict
+        dictionary of default param values.
+    resPower_target : int
+        target resolution of the models
+    use_pymsg : bool
+        True to use the pymsg package to load the models
+    pymsg_specgrid : msg.SpecGrid object
+        pre-loaded from the file name
+
+    ---
+    Return:
+    model_wv : numpy 1d array
+        wavelength array of the models
+    model_fl_phot_spot_fac : tuple of arrays
+        tuple of arrays containing the photosphere, spots, and faculae models
+    """
     param = get_derived_param(param)
 
     model_wv, model_spot_fl = load_phoenix_model(param['Tspot'], param["met"], param["logg_het"], resPower_target=resPower_target, use_pymsg=use_pymsg, pymsg_specgrid=pymsg_specgrid)
     _, model_phot_fl = load_phoenix_model(param['Tphot'], param["met"], param["logg_phot"], resPower_target=resPower_target, use_pymsg=use_pymsg, pymsg_specgrid=pymsg_specgrid)
     _, model_fac_fl = load_phoenix_model(param['Tfac'], param["met"], param["logg_het"], resPower_target=resPower_target, use_pymsg=use_pymsg, pymsg_specgrid=pymsg_specgrid)
-    
+
     model_fl_phot_spot_fac = (model_spot_fl,model_phot_fl,model_fac_fl)
     return model_wv, model_fl_phot_spot_fac
 
@@ -769,6 +887,40 @@ def load_phoenix_models_from_param(param, resPower_target=10000, use_pymsg=True,
 
 def generate_PHOENIX_grid_fixedR(wv_target, wv_edges, feh=0.0, Teff_range=[], logg_range=[], 
                           Teffstep=20, loggstep=0.1, fname_save="", use_pymsg = True, pymsg_specgrid=None):
+    """
+    Generate a grid of PHOENIX models at fixed R for a range of temperatures and logg values
+
+    wv_target: numpy 1d array
+        target wavelength array
+    wv_edges: numpy 1d array
+        wavelength edges of the target wavelength array
+    feh: float
+        metallicity of the models
+    Teff_range: list of float
+        range of temperatures for the grid (min, max)
+    logg_range: list of float
+        range of logg values for the grid (min, max)
+    Teffstep: float
+        step size in temperature
+    loggstep: float
+        step size in logg
+    fname_save: str
+        file name to save the grid
+    use_pymsg: bool
+        True to use the pymsg package to load the models
+    pymsg_specgrid: msg.SpecGrid object
+        pre-loaded from the file name of the targeted spectral models grid
+
+    ---
+    Returns:
+
+    Teffs_grid : numpy 1d array
+        grid of temperatures
+    loggs_grid : numpy 1d array
+        grid of logg values
+    models_grid : 3d array
+        grid of models with varying temperatures and loggs, at fixed R
+    """
     
     nwave = len(wv_target)
     Teffs_grid = np.arange(Teff_range[0], Teff_range[1], Teffstep)
@@ -787,10 +939,42 @@ def generate_PHOENIX_grid_fixedR(wv_target, wv_edges, feh=0.0, Teff_range=[], lo
     h5f.close()
     return Teffs_grid, loggs_grid, models_grid
 
-#%% Saving
+##  Saving
 
 def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparanames, save_fit):
-    # write csv file and astropy table with samples outside of burn-in
+    """
+    Save the MCMC results to a pandas dataframe and an astropy table
+
+    results_folder: str
+        folder to save the results
+    runname: str
+        identifier of the run
+    sampler: emcee.EnsembleSampler object
+        sampler object
+    burnin: int
+        number of burn-in steps
+    ndim: int
+        number of dimensions
+    fitparanames: list of str
+        list of the fitted parameters
+    save_fit: bool
+        True to save the results
+
+    ---
+    Returns:
+    bestfit: pandas dataframe
+        dataframe containing the best fit parameters
+    ind_bestfit: int
+        index of the best fit
+    ind_maxprob: int
+        index of the maximum probability
+    parabestfit: numpy 1d array
+        best fit parameters
+    samples: pandas dataframe
+        dataframe containing the samples
+    t_res: astropy table
+        table containing a summary of the results
+    """
     samples = pd.DataFrame(sampler.chain[:, burnin:, :].reshape((-1, ndim)),
                            columns=[x for x in fitparanames])
     lnprobability = pd.Series(sampler.lnprobability[:, burnin:].reshape(-1),
@@ -816,6 +1000,25 @@ def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparan
     return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
 
 def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, results_folder, runname, save_fit=True):
+    """
+    Save the best fit statistics to a csv file
+
+    spec: TransSpec object
+        (planet atmosphere observations in transmission)
+    ind_bestfit: int
+        index of the best fit
+    fitparanames: list of str
+        list of the fitted parameters
+    flat_st_ctm_models: list of arrays
+        list of the models
+    results_folder: str
+        folder to save the results
+    runname: str
+        identifier of the run
+    save_fit: bool
+        True to save the results
+
+    """
     # create a dictionary that collates all the best-fit information
     print("Saving stats on the best fit...")
     bestfit_stats = dict()
@@ -833,10 +1036,11 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, resu
         print("Writing to file...")
         aio.ascii.write(t_bestfit_stats, results_folder+"stctm_bestfit_stats_"+runname+'.csv', format='csv', overwrite=True)
 
-#%% Plotting
+##  Plotting
 
 def setAxesFontSize(ax,fontsize):
-    """ 
+    """
+    Set the font size of the axes
     adapted from auxbenneke/utilities.py
     """
     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
@@ -844,7 +1048,8 @@ def setAxesFontSize(ax,fontsize):
         item.set_fontsize(fontsize)
         
 def chainplot(samples,labels=None,nwalkers=None,fontsize=None,lw=1,stepRange=None):
-    """ 
+    """
+    Create a chain plot from the samples
     adapted from auxbenneke/utilities.py
     """
     if samples.ndim==2:
@@ -882,7 +1087,8 @@ def chainplot(samples,labels=None,nwalkers=None,fontsize=None,lw=1,stepRange=Non
     return fig,axes
 
 def xspeclog(ax,xlim=None,level=1,fmt="%2.1f"):
-    """ 
+    """
+    Set the x-axis to a log scale with major and minor ticks
     adapted from auxbenneke/utilities.py
     """
     
@@ -921,6 +1127,48 @@ def plot_stctm_blobs(spec, stctm_models_blobs,
                           plot3sig=True, plot2sig=True, plot1sig=True, plotmedian=True,
                           plotbestfit=True, legend_loc=1, save_csv=False, 
                           results_folder="", runname=""):
+    """
+    Plot spectra obtained from the retrieval with uncertainty from blobs.
+
+    Parameters
+    ----------
+    spec: TransSpec object
+        (planet atmosphere observations in transmission)
+    stctm_models_blobs : array-like
+        array of model outputs sampled from the posterior distribution.
+    ind_bestfit : int
+        Index of the max-like model in `stctm_models_blobs`
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axis object to plot on. If None, a new axis is created.
+    bestfit_color : str, default 'k'
+        Color used to plot the best-fit model.
+    color : str, default 'b'
+        Color used for median, 1, 2, 3 sigma contours.
+    plot3sig : bool, default True
+        If True, plot the 3-sigma uncertainty region.
+    plot2sig : bool, default True
+        If True, plot the 2-sigma uncertainty region.
+    plot1sig : bool, default True
+        If True, plot the 1-sigma uncertainty region.
+    plotmedian : bool, default True
+        If True, plot the median model prediction.
+    plotbestfit : bool, default True
+        If True, plot the best-fit model.
+    legend_loc : int, default 1
+        Location of the legend in the plot (uses matplotlib legend location codes).
+    save_csv : bool, default False
+        If True, save a CSV file with the quantiles and best-fit predictions.
+    results_folder : str, optional
+        Directory path where the CSV file should be saved (if `save_csv=True`).
+    runname : str, optional
+        Base name used for the saved CSV file (if `save_csv=True`).
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axis object with the plot drawn on it.
+
+    """
 
 
     # percentiles = [2.5, 16., 50., 84., 97.5]
@@ -974,25 +1222,6 @@ def plot_stctm_blobs(spec, stctm_models_blobs,
         t.write(results_folder+"blobs_1_2_3_sigma"+runname+".csv", overwrite=True)
     return fig, ax
 
-def get_para_for_postprocess(param, fitparanames, bestfit_params_and_quantiles_table, which):
-    """
-    which has to be in: ['50', '16', '84', '2.5', '97.5', 'MaxLike']
-    returns a dict of temperatures and het. fractions
-    """
-    para_stcontmodel = dict()
-    allpara = ["Tspot" , "Tphot", "Tfac", "fspot", "ffac", "log_fspot", "log_ffac"]
-    for p in allpara:
-        if p in fitparanames:
-            if p[0] == "d":
-                para_stcontmodel[p[5:]] =  bestfit_params_and_quantiles_table[which][p] + para_stcontmodel["Tphot"]
-            para_stcontmodel[p] =  bestfit_params_and_quantiles_table[which][p]
-        elif "delta"+p in fitparanames:
-            allpara.append("delta"+p)
-        else:
-            para_stcontmodel[p] = param[p]
-
-    return para_stcontmodel
-
 
 
 def plot_stctm_samples_res(spec, param, fitparanames,
@@ -1005,9 +1234,78 @@ def plot_stctm_samples_res(spec, param, fitparanames,
                           plot2sig=True, plot1sig=True, plotmedian=True,
                           plotbestfit=True, legend_loc=1, save_csv=True, 
                           results_folder="", runname=""):
-    
 
-    
+    """
+    Plot model spectra at chosen fixed R from a stellar contamination retrieval
+
+    This function generates a forward-modeled stellar contamination spectrum using either provided sample spectra or
+    by computing spectra from posterior samples. It plots the median, 1/2/3-sigma confidence intervals, and optionally the
+    maximum likelihood (best-fit) spectrum.
+
+    Parameters
+    ----------
+    spec: TransSpec object
+        (planet atmosphere observations in transmission)
+    param : dict
+        Dictionary of default or initialized model parameters.
+    fitparanames : list of str
+        Names of parameters varied in the fit.
+    ind_bestfit : int
+        Index of the maximum likelihood (best-fit) sample in `post_burnin_samples`.
+    post_burnin_samples : pandas.DataFrame
+        Posterior samples (after burn-in)
+    T_grid : array-like
+        Grid of stellar temperatures used to interpolate model spectra
+    logg_grid : array-like
+        Grid of surface gravities used to index model spectra.
+    modelgrid_wave : array-like
+        Wavelength grid corresponding to the model grid spectra.
+    grid_models_fixedresP : ndarray
+        Array containing model spectra at fixed resolution, indexed by temperature and gravity.
+    sample_spectra : ndarray, optional
+        Pre-computed array of posterior model spectra (shape: [N_samp, n_wave]). If None, spectra are generated from samples.
+    modelgrid_resP : int, default 10000
+        Resolving power of the model grid (used to determine convolution kernel width).
+    target_resP : int, default 100
+        Target resolving power for the final spectrum, used for spectral convolution.
+    N_samp : int, default 1000
+        Number of posterior samples to draw for uncertainty estimation.
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axis object to plot on. If None, a new figure and axis are created.
+    bestfit_color : str, default 'k'
+        Line color for the best-fit model spectrum.
+    color : str, default 'b'
+        Base color for uncertainty shading and median spectrum line.
+    plot3sig : bool, default True
+        If True, plot the 3-sigma (99.8%) confidence region.
+    plot2sig : bool, default True
+        If True, plot the 2-sigma (95.4%) confidence region.
+    plot1sig : bool, default True
+        If True, plot the 1-sigma (68.3%) confidence region.
+    plotmedian : bool, default True
+        If True, plot the median model spectrum.
+    plotbestfit : bool, default True
+        If True, plot the best-fit (maximum likelihood) spectrum.
+    legend_loc : int, default 1
+        Location of the legend (matplotlib legend code).
+    save_csv : bool, default True
+        If True, save a CSV file with the best-fit and quantile spectra.
+    results_folder : str, optional
+        Path to the folder where results (CSV) should be saved.
+    runname : str, optional
+        Custom string used in the saved CSV file name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or None
+        The matplotlib figure object. None if an existing axis was passed.
+    ax : matplotlib.axes.Axes
+        The axis containing the plot.
+    sample_spectra : ndarray
+        Array of model spectra generated from posterior samples.
+
+    """
+
     # get the target wavelength array
     kernel=Gaussian1DKernel(modelgrid_resP / target_resP / 2.35)    # *2 because FWHM = 2 standard deviation
     l = int(kernel.shape[0]/2)
@@ -1032,7 +1330,7 @@ def plot_stctm_samples_res(spec, param, fitparanames,
                 print("i=", i+1, "/", N_samp)
             theta = post_burnin_samples.iloc[ind_samples[i]]
             for j, paraname in enumerate(fitparanames):
-                param[paraname] = theta[j]
+                param[paraname] = theta.loc[j]
             param = get_derived_param(param)
             
             ind_Tspot = np.argmin(np.abs(T_grid-param["Tspot"]))
@@ -1059,7 +1357,7 @@ def plot_stctm_samples_res(spec, param, fitparanames,
     # calculate spectrum for best-fit parameters
     theta = post_burnin_samples.iloc[ind_bestfit]
     for i, paraname in enumerate(fitparanames):
-        param[paraname] = theta[i]
+        param[paraname] = theta.loc[i]
     param = get_derived_param(param)
     
     ind_Tspot = np.argmin(np.abs(T_grid-param["Tspot"]))
@@ -1135,6 +1433,21 @@ def plot_stctm_samples_res(spec, param, fitparanames,
     # return fig, ax, sample_spectra
 
 def get_closest_models_from_grid(param, grid_models_fixedresP, T_grid, logg_grid):
+    """
+    Given the parameter values, get the closest stellar model in terms of Teff, logg
+
+    Parameters
+    ----------
+    param : dict
+        dictionary of default param values.
+    grid_models_fixedresP : numpy array
+        grid of fixed-resolution models to choose from.
+    T_grid: numpy 1d array
+        grid of temperatures for the grid of models (models_grid)
+    logg_grid: numpy 1d array
+        grid of loggs for the grid of models (models_grid)
+
+    """
     ind_Tspot = np.argmin(np.abs(T_grid-param["Tspot"]))
     ind_Tfac = np.argmin(np.abs(T_grid-param["Tfac"]))
     ind_Tphot = np.argmin(np.abs(T_grid-param["Tphot"]))
@@ -1149,12 +1462,23 @@ def get_closest_models_from_grid(param, grid_models_fixedresP, T_grid, logg_grid
     
 def get_stctm_blobs(stctm_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 97.7, 99.8]):
  
-    
-    # for each epoch of each planet, get the median, 1 and 2sigma pred time
+    """
+    Get the median, 1, 2 and 3sigma prediction spectrum from the blobs
+    :param stctm_models_blobs: array of blobs
+    :param percentiles: list of percentiles to compute
+    :return: spectrum corresponding to each percentile
+    """
+
     stctm_percentiles = np.nanpercentile(stctm_models_blobs, percentiles, axis=0)
     return stctm_percentiles
 
 def get_stctm_amplitude(spec, stctm_percentiles):
+    """
+    Get amplitude of stellar contamination signature from the retrieval
+    :param spec: TransSpec object
+    :param stctm_percentiles: spectra obtained for each of the computed percentiles
+    :return: amplitude of the stellar contamination component at 1, 2, 3 sigma
+    """
     med = np.median(spec['yval'])
     stctm_percentiles = stctm_percentiles - med
     ampl_3sig = np.max(np.array([np.abs(stctm_percentiles[0]), np.abs(stctm_percentiles[-1])]), axis=0)
@@ -1165,6 +1489,33 @@ def get_stctm_amplitude(spec, stctm_percentiles):
 def plot_stctm_amplitude(spec, stctm_models_blobs,
                           ax=None,color="b",
                           plot3sig=True, plot2sig=True, plot1sig=True):
+    """
+    Plot the amplitude of the stellar contamination signature from the retrieval
+
+    Parameters
+    ----------
+    spec: TransSpec object
+        Observed planet spectrum
+    stctm_models_blobs: array
+        Blobs containing the models integrated within the bandpass of each data point
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axis object to plot on. If None, a new figure and axis are created.
+    color : str, default 'b'
+        Base color for uncertainty shading and median spectrum line.
+    plot3sig : bool, default True
+        If True, plot the 3-sigma (99.8%) confidence region.
+    plot2sig : bool, default True
+        If True, plot the 2-sigma (95.4%) confidence region.
+    plot1sig : bool, default True
+        If True, plot the 1-sigma (68.3%) confidence region.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or None
+        The matplotlib figure object. None if an existing axis was passed.
+    ax : matplotlib.axes.Axes
+        The axis containing the plot.
+    """
     
     if ax is None:
         fig, ax = plt.subplots(1,1)
@@ -1219,6 +1570,15 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
     return fig
 
 def plot_custom_corner(samples, fitparanames, parabestfit):
+    """
+    Plot a custom corner plot with the parameters in a specific order
+    :param samples: array of posterior samples
+    :param fitparanames: labels for the fitted parameters
+    :param parabestfit: fitted parameters for the best-fit model
+    :return:
+    fig : matplotlib.figure.Figure
+        The matplotlib figure object.
+    """
     # reorder samples
     ordered_samples = np.zeros_like(samples)
     ordered_fitparanames_all = ["fspot", "log_fspot","deltaTspot", "ffac", "log_ffac","deltaTfac", "dlogg_het", "Tphot", "logg_phot","Dscale"]
@@ -1251,6 +1611,11 @@ def plot_custom_corner(samples, fitparanames, parabestfit):
     return fig
 
 def get_labels_from_fitparanames(fitparanames):
+    """
+    Get the labels for the corner plot from the fit parameter names
+    :param fitparanames: labels of fitted parameters in the retrieval
+    :return: labels to use in the corner plot
+    """
     labels = []
     for p in fitparanames:
         if p == "fspot":
@@ -1278,6 +1643,37 @@ def get_labels_from_fitparanames(fitparanames):
     return labels
              
 def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit, fitparanames, flat_st_ctm_models, pad=0.25):
+
+    """
+    Plot the maximum likelihood and maximum probability stellar contamination model spectra.
+
+    Parameters
+    ----------
+    spec : TransSpec object
+        Observed spectrum object
+    param : dict
+        Default parameter dictionary to be updated with the best-fit values.
+    parabestfit : array-like
+        Best-fit parameter values from the retrieval.
+    ind_maxprob : int
+        Index of the highest posterior probability model in `flat_st_ctm_models`.
+    ind_bestfit : int
+        Index of the maximum likelihood model in `flat_st_ctm_models`.
+    fitparanames : list of str
+        Names of parameters included in the fit.
+    flat_st_ctm_models : array-like
+        Array of stellar contamination models from the posterior.
+    pad : float, default 0.25
+        Padding around wavelength range for plot limits.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure object.
+    ax : matplotlib.axes.Axes
+        The axis with the plotted spectrum.
+    """
+
     # Plot best fit stellar contamination model
     fig, ax = spec.plot()
     param_bestfit = deepcopy(param)
@@ -1296,6 +1692,28 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
     return fig, ax   
 
 def get_and_plot_residual_spec(spec, flat_st_ctm_models, ind_bestfit):
+    """
+    Compute and plot the residual spectrum after subtracting the best-fit stellar contamination model.
+
+    Parameters
+    ----------
+    spec : TransSpec object
+        Observed spectrum object
+    flat_st_ctm_models : array-like
+        Array of stellar contamination models from the posterior.
+    ind_bestfit : int
+        Index of the best-fit model to subtract.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure object.
+    ax : matplotlib.axes.Axes
+        The axis with the plotted residual spectrum.
+    residual_spec : object
+        The spectrum object with residual values (original - best-fit model).
+    """
+
     best_fit_dppm = flat_st_ctm_models[ind_bestfit]
     
     residual_spec = deepcopy(spec)
@@ -1314,7 +1732,32 @@ def get_and_plot_residual_spec(spec, flat_st_ctm_models, ind_bestfit):
     return fig, ax, residual_spec
 
 def get_and_plot_bestfitcorr_spec(spec, flat_st_ctm_models, bestfit, ind_bestfit, pad=0.25):
-    # get the best-fitting stellar contamination spectrum
+    """
+    Correct the observed spectrum using the best-fit stellar contamination model and plot the corrected spectrum.
+
+    Parameters
+    ----------
+    spec : TransSpec object
+        Observed spectrum object
+    flat_st_ctm_models : array-like
+        Array of stellar contamination models from the posterior.
+    bestfit : pandas.Series or DataFrame
+        DataFrame containing best-fit parameter values including 'Dscale'.
+    ind_bestfit : int
+        Index of the best-fit model in `flat_st_ctm_models`.
+    pad : float, default 0.25
+        Padding to extend the x-axis plot limits.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure object.
+    ax : matplotlib.axes.Axes
+        The axis with the corrected spectrum.
+    corrected_spec : object
+        Spectrum object corrected by dividing out the best-fit model.
+    """
+
     best_fit_stctm_spec = flat_st_ctm_models[ind_bestfit]
     
     
@@ -1349,13 +1792,33 @@ def get_and_plot_bestfitcorr_spec(spec, flat_st_ctm_models, bestfit, ind_bestfit
 
 def get_and_plot_stctmcorr_spec(spec, flat_st_ctm_models, samples, fitparanames, nsamp=1000, pad=0.25):
     """
-    get a spec object that contains the spectrum corrected 
-    by the full posterior of stellar contamination spectra
-    and plot the result
-    
-    pad: for wave range
+    Correct the observed spectrum using an ensemble of posterior stellar contamination models and plot the result.
+
+    Parameters
+    ----------
+    spec : TransSpec object
+        Observed spectrum object
+    flat_st_ctm_models : ndarray
+        Array of stellar contamination spectra from the posterior.
+    samples : pandas.DataFrame
+        Posterior samples, including 'Dscale' values.
+    fitparanames : list of str
+        Names of the fitted parameters (not directly used but included for consistency).
+    nsamp : int, default 1000
+        Number of posterior samples to use for correction.
+    pad : float, default 0.25
+        Padding to extend the x-axis plot limits.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The matplotlib figure object.
+    ax : matplotlib.axes.Axes
+        Axis with the plotted corrected spectrum.
+    spec_stctmcorr : object
+        Corrected spectrum object, updated with uncertainty from posterior correction.
     """
-    
+
     spec_stctmcorr = deepcopy(spec)
     
     random_indices = np.random.randint(0,flat_st_ctm_models.shape[0],nsamp)
