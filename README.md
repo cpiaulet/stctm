@@ -92,13 +92,25 @@ You can fit any transmission spectrum (loaded into the code as a ```pyTransSpec`
 
 In the way it is currently released, ```stctm``` requires you to enter the planet and star information directly in the run script. I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
 
-#### File paths
+#### File and environment paths
 The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```stellar_retrieval_v13_generic_runfile.py```), resides. However, relative paths matter as the results folder will reside in ```../../stellar_contamination_results/``` (run-specific results folder automatically created by the code). 
+
+Make sure that your environment paths are set up properly.
+Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
+You can do this via the command-line (see example below for ```CRDS_PATH```):
+
+    export CRDS_PATH=/home/caroline/crds_cache
+   
+or in the code of the analysis file itself:
+
+    import os
+    os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+
 
 #### Setting up labels and path to spectrum file
 Under ```User inputs: Spectrum and labels``` you can set up:
 * ```label``` (used for plotting)
-* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```pyTransSpec``` object using the ```spec_format``` setting you choose - if you are not sure or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
+* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```pyTransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
 * ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
 
 #### Setting up the stellar parameters
