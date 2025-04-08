@@ -74,8 +74,21 @@ I also compute the grid at a resolving power of 10,000 (```resPower_target```), 
 To calculate a grid of models, navigate to the folder where the run script resides, and simply run:
     python create_fixedR_grid_pymsg_template.py
 
-### Setting up a retrieval
+
+## Stellar contamination retrieval vs. stellar spectrum retrievals
+
 Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
+
+With ```stctm```, you can either fit **transmission spectra** to obtain constraints on the TLSE (assuming it can explain all of the spectral variations), or fit **stellar spectra** to infer the mixtures of spectral components that can reproduce an observed flux-calibrated stellar spectrum (```exotune``` sub-module).
+
+* The basic setup of ```stctm``` allows you to obtain posterior distributions on stellar surface parameters and ranges of transmission spectra that best match an observed transmission spectrum from the effect of unocculted stellar surface heterogeneities **alone** (TLS retrieval). To run such a retrieval, use the examples in ```stellar_contamination_analysis/``` (results to be populated in a ```stellar_contamination_results/``` folder).
+* For stellar spectrum retrievals with ```exotune```, use the examples in ```exotune_analysis/``` (results to be populated in a ```exotune_results/``` folder).
+
+## Stellar contamination (TLSE) retrievals with *stctm*
+
+You can fit any transmission spectrum (loaded into the code as a ```pyTransSpec``` object) assuming any variations from a straight line are due to the transit light source effect. In its current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
+
+### Setting up a retrieval
 
 In the way it is currently released, ```stctm``` requires you to enter the planet and star information directly in the run script. I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
 
