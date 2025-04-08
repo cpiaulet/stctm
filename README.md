@@ -4,12 +4,13 @@
 
 If you use this code, please cite the associated Zenodo repository, with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
 If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use.
-First public release associated to: Piaulet-Ghorayeb et al., submitted.
+First public release associated to: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
 
 Previous uses of the code:
 * Lim et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), on TRAPPIST-1 b
 * Roy et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...954L..52R/abstract), on GJ 9827 d
-* Benneke et al., submitted, on TRAPPIST-1 g
+* Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract), on GJ 9827 d
+* Radica et al., 2025 (https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract), on TRAPPIST-1 c
 
 Bare-bones skeleton of the code released for now - full user instructions and user-friendly setup to come soon!
 
@@ -79,35 +80,60 @@ Copy the contents of ```stctm/example/``` wherever in your installation you want
 In the way it is currently released, ```stctm``` requires you to enter the planet and star information directly in the run script. I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
 
 #### File paths
-The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```stellar_retrieval_v10_generic_runfile.py``), resides. However, relative paths matter as the results folder will reside in ```../../stellar_contamination_results/``` (it is automatically created by the code). 
+The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```stellar_retrieval_v13_generic_runfile.py```), resides. However, relative paths matter as the results folder will reside in ```../../stellar_contamination_results/``` (run-specific results folder automatically created by the code). 
 
 #### Setting up labels and path to spectrum file
 Under ```User inputs: Spectrum and labels``` you can set up:
 * ```label``` (used for plotting)
-* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in using the ```spec_format``` setting you choose - if you are not sure or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
-* ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc.
+* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```pyTransSpec``` object using the ```spec_format``` setting you choose - if you are not sure or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
+* ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
+
+#### Setting up the stellar parameters
+
+Under ```User inputs: Stellar parameters```, enter the parameters of the star to set the defaults for the fit. Make sure that you have an option ("if" statement) matching the ```which_star``` setting you entered above.
 
 #### Choosing the setup of your retrieval
 
 Under ```User inputs: MCMC fitting params``` you can choose:
 * ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
-* ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60%.
+* ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
 * ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
 * ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
 * ```fitThet```: ```True``` if you want to fit for the temperature of unocculted spots and/or faculae, ```False``` otherwise.
 * ```fitTphot```: ```True``` if you want to fit for the temperature of the photosphere, ```False``` otherwise.
 * ```fitDscale```: ```True``` if you want to fit for the bare-rock transit depth (recommended), ```False``` otherwise.
+* ```fitlogg_phot```: ```True``` if you want to fit the photosphere log g, ```False``` otherwise.
 * ```fitlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
-* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps
+* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
 
-Priors on the stellar parameters:
-* ```Teffstar_prior_std```: in Kelvin, standard deviation of the Gaussian prior adopted on the stellar effective temperature;
+#### Priors and default values
+
+You can set a Gaussian prior on any of your fitted parameters, using the ```gaussparanames``` and ```hyperp_gausspriors``` variables.
+
+By default (uniform priors on all fitted parameters):
+```
+gaussparanames = np.array([])
+hyperp_gausspriors = []
+```
+Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ```gaussparanames```, and add an element to the list ```hyperp_gausspriors``` that consists of a 2-element list of ```[mean_gaussian_prior, std_gaussian_prior]```. Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE):
+```
+gaussparanames = np.array(["Tphot"])
+hyperp_gausspriors = [[Teffstar,70]] # mean and std of the Gaussian prior on Tphot
+```
+where here I used ```Teffstar``` instead of a value for the stellar effective temperature, as it was defined in the Stellar Parameters section above.
+
+The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ```fitLogfSpotFac``` parameter. 
+* Use ```fitLogfSpotFac = [0,0]``` for the default settings of both parameters fitted with linear-uniform priors
+* Set the first/second element to 1 instead to use a log-uniform priors on ```fspot```(```ffac```).
+* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = [lower_bound, upper_bound]```.
+
+Default values for the stellar and heterogeneity log g
+
 * ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
 * ```logg_het_default_source```: ```value``` to use the value of ```logg_het_value``` as the heterogeneities (default, if fitted) log g, otherwise ```logg_phot``` to set it to the same value as the stellar photosphere log g.
 
-#### Setting up the stellar parameters and reading in the grid of stellar models
 
-Under ```User inputs: Stellar parameters```, enter the parameters of the star to set the defaults for the fit. Make sure that you have an option ("if" statement) matching the ```which_star``` setting you entered above.
+#### Reading in the grid of stellar models
 
 Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
 
