@@ -1,8 +1,7 @@
 # stctm
-*stctm* (STellar ConTamination Modeling) performs spectral retrievals on exoplanet transmission spectra assuming that the spectrum can be explained by stellar contamination alone.
+*stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components. 
 
-
-If you use this code, please cite the associated Zenodo repository, with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
+If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
 If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use.
 First public release associated to: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
 
@@ -183,7 +182,7 @@ If you wish to change the way the prior is set up on any of the fitted parameter
 
 ## Citation
 
-The following entry to a bib file can be used to cite this code:
+Until the submission of this code for a JOSS publication, the following entry to a bib file can be used to cite this code:
 
     @misc{piaulet_stctm_2024,
         author       = {Caroline Piaulet-Ghorayeb},
