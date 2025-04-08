@@ -164,13 +164,25 @@ Under ```User inputs: Read in stellar models grid```, modify the range and spaci
 #### Post-processing
 
 By default, the code will produce (and save to the results folder):
+
+Inputs to the code:
 * a copy of the run file that was used
 * a copy of the version of ```stellar_retrieval_utilities.py``` that was used
-* chain plots, with and without the burn-in steps
-* a csv file containing the fitted parameters from the chain, with the associated log likelihood and log probability values
-* a csv file containing, for each parameter, the best-fit value (maximum likelihood), the max-probability values, as well as percentiles which can be used for quoting in tables
-* a set of models at the grid resolution (```target_resP```) also corresponding to the max-likelihood, max-probability samples, and percentiles
-* figures showing the spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power of 100 in the plot) or integrated within the same bins as the data points), and a plot of the stellar contamination contribution as a function of wavelength
+* a figure displaying the spectrum being fitted
+* ```defaultparams```: CSV file with the default parameters used to initialize the fit
+
+Outputs of the code:
+PNG files:
+
+CSV files:
+* ```pandas``` file: fitted parameters from the chain, with the associated log likelihood and log probability values
+* ```bestfit``` file: for each parameter, the best-fit value (maximum likelihood), the max-probability values, as well as percentiles which can be used for quoting in tables
+* ```fixedR_1_2_3_sigma``` file: a csv file contset of models at the resolving power ```target_resP``` (R=100 by default) also corresponding to the max-likelihood, max-probability samples, and percentiles
+
+Figures:
+* ```chainplot```: chain plots, with and without the burn-in steps
+* ```resP..._1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis.
+* fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models integrated within the same bins as the data points), and a plot of the stellar contamination contribution as a function of wavelength
 * a corner plot of post-burnin samples
 * a plot of the best-fit model, integrated to match the bins in the observed spectrum
 
