@@ -52,7 +52,7 @@ I provide a template code snippet for how to go about computing this stellar mod
 Specifically, you need to have the ```MESASDK_ROOT``` and ```MSG_DIR``` environment variables defined.
 You can do this via the command-line:
 
-    export MESASDK_ROOT=~/mesasdk
+    $ export MESASDK_ROOT=~/mesasdk
    
 or in the code itself:
 
@@ -172,19 +172,23 @@ Inputs to the code:
 * ```defaultparams```: CSV file with the default parameters used to initialize the fit
 
 Outputs of the code:
-PNG files:
 
 CSV files:
 * ```pandas``` file: fitted parameters from the chain, with the associated log likelihood and log probability values
 * ```bestfit``` file: for each parameter, the best-fit value (maximum likelihood), the max-probability values, as well as percentiles which can be used for quoting in tables
-* ```fixedR_1_2_3_sigma``` file: a csv file contset of models at the resolving power ```target_resP``` (R=100 by default) also corresponding to the max-likelihood, max-probability samples, and percentiles
+* ```bestfit_stats``` file: model comparison statistics: index of the best-fit model (in the post-burnin samples), the corresponding (reduced) chi-squared value, and BIC
+* ```fixedR_1_2_3_sigma``` file: a csv file containing a set of models at the resolving power ```target_resP``` (R=100 by default) corresponding to the max-likelihood, max-probability samples, and percentiles
+* ```blobs_1_2_3_sigma``` file: a csv file containing a set of models integrated within the bins of the observed spectrum corresponding to the max-likelihood, max-probability samples, and percentiles
 
-Figures:
+Diagnostics figures:
 * ```chainplot```: chain plots, with and without the burn-in steps
+* ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted
+
+Publication-ready figures:
+* ```1_2_3_sigma_withamplitude``` file: same as ```1_2_3_sigma``` but with a lower panel showing the amplitude of the stellar contamination signature across wavelength in the spectrum (in absolute terms)
 * ```resP..._1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis.
-* fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models integrated within the same bins as the data points), and a plot of the stellar contamination contribution as a function of wavelength
+* ```1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models all integrated within the same bins as the data, with a log or lin scale for the wavelength axis.
 * a corner plot of post-burnin samples
-* a plot of the best-fit model, integrated to match the bins in the observed spectrum
 
 Please let me know if other things would be useful for you to have as default outputs, or feel free to create pull requests with your nice additions!
 
