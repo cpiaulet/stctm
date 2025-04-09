@@ -49,6 +49,15 @@ import corner
 from multiprocessing import Pool
 # from emcee.utils import MPIPool
 
+#%% Stats
+
+def BIC(chi2,nDataPoints,nPara):
+    '''
+    Adapted from auxbenneke/utilities.py
+    Liddle, A.R., 2007. Information criteria for astrophysical model selection. Monthly Notices of the Royal Astronomical Society: Letters 377, L74–L78. https://doi.org/10.1111/j.1745-3933.2007.00306.x
+    The BIC assumes that the data points are independent and identically distributed, which may or may not be valid depending on the data set under consideration
+    '''
+    return chi2 + nPara*np.log(nDataPoints)
 
 #%% Utility functions
 
@@ -82,7 +91,9 @@ def plot_median_spectrum_and_unc(wave_arr, median_spectrum, err_median_spectrum,
 
 def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=True, 
                                   fitThet=False, fitTphot=False, fitFscale=True,
-                                  fitlogg_phot=False,fitdlogg_het=False,fiterrInfl=False,
+                                  fitlogg_phot=False,fitdlogg_het=False,
+                                  fitLogfSpotFac=[0,0],
+                                  fiterrInfl=False,
                                   Fscale_guess = 1, dlogg_het_guess = 0.0):
     """
     
@@ -143,13 +154,21 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
         fitparanames.append("logErrInfl")        
     if fitspot:       
         param["fspot"] = 0.02
-        fitparanames.append("fspot")
+        if fitLogfSpotFac[0]:
+            param["log_fspot"] = np.log10(param["fspot"])
+            fitparanames.append("log_fspot")
+        else:
+            fitparanames.append("fspot")
     else:
         param["fspot"] = 0.    
+    
     if fitfac:
-        
         param["ffac"] = 0.05
-        fitparanames.append("ffac")
+        if fitLogfSpotFac[1]:
+            param["log_ffac"] = np.log10(param["ffac"])
+            fitparanames.append("log_ffac") 
+        else:
+            fitparanames.append("ffac")
     else:
         param["ffac"] = 0.
     
@@ -189,6 +208,10 @@ def get_derived_param(param):
     param["logghet"] = param["loggphot"] + param["dlogghet"]
     param["Fscale"] = 10**(param["logFscale"])
     param["errInfl"] = 10**(param["logErrInfl"])
+    if "log_fspot" in param.keys():
+        param["fspot"] = 10**param["log_fspot"] 
+    if "log_ffac" in param.keys():
+        param["ffac"] = 10**param["log_ffac"] 
     return param
 
 
@@ -368,9 +391,9 @@ def lnlike(theta, param, fitparanames, spec, models_baseline, T_grid, logg_grid,
     lnlk = -0.5*(np.sum((yval-model_int )**2./yerrLow**2.))
     
     return lnlk, model_int
-def get_param_priors(param, gaussparanames, mean_Gauss_para=np.array([]), std_Gauss_para=np.array([]),
-                     
-                     T_grid=[2300, 10000], logg_grid=[2.5,5.5], Fscale_guess=1.):
+def get_param_priors(param, gaussparanames,hyperp_gausspriors=[], 
+                     fitLogfSpotFac=[False,False], hyperp_logpriors=[],T_grid=[2300, 10000], 
+                     logg_grid=[2.5,5.5], Fscale_guess=1.):
     """
 
     Parameters
@@ -383,28 +406,63 @@ def get_param_priors(param, gaussparanames, mean_Gauss_para=np.array([]), std_Ga
     dictionary of parameter priors in the form of [low, high] for uniform priors.
 
     """
-    parampriors = dict()
-    parampriors['ffac'] = [0., 0.5]
-    parampriors['fspot'] = [0., 0.5]
-    parampriors['deltaTfac'] = [50, T_grid[-1]-param["Tphot"]]
-    parampriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -50.]
-    parampriors["logFscale"] = [np.log10(Fscale_guess)-5, np.log10(Fscale_guess)+5]
-    parampriors["logErrInfl"] = [0,np.log10(50)]
-    # parampriors["Fscale"] = [0.01, 50]
-    parampriors["loggphot"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
-    parampriors["dlogghet"] = [logg_grid[0]-param["loggphot"], 0.]
-    parampriors["Tphot"] = [T_grid[0], T_grid[-1]]
     
+    
+    
+    defaultpriors = dict()
+
+    defaultpriors['ffac'] = [0., 0.9]
+    defaultpriors['fspot'] = [0., 0.9]
+    defaultpriors['deltaTfac'] = [100, T_grid[-1]-param["Tphot"]]
+    defaultpriors['deltaTspot'] = [T_grid[0]-param["Tphot"], -100.]
+    defaultpriors["Tphot"] = [T_grid[0], T_grid[-1]]
+    defaultpriors["logFscale"] = [np.log10(Fscale_guess)-5, np.log10(Fscale_guess)+5]
+    defaultpriors["logErrInfl"] = [0,np.log10(50)]
+
+    defaultpriors["loggphot"] = [np.max([logg_grid[0],2.5]), np.min([5.5, logg_grid[-1]])]
+    defaultpriors["dlogghet"] = [logg_grid[0]-param["logg_phot"], 0.]
+    
+    parampriors = dict()
+    
+    # check parameters for log priors
+    allparanames = ['ffac',"fspot","deltaTfac","deltaTspot", "Tphot", "logFscale","loggphot","dlogghet","logErrInfl"]
+    for par in allparanames:
+        if par not in ["fspot", "ffac"]:
+            parampriors[par] = defaultpriors[par]
+        else:
+            if par == "fspot":
+                if fitLogfSpotFac[0]:
+                    lowlim = hyperp_logpriors[0]
+                    upplim = hyperp_logpriors[1]
+                    parampriors["log_"+par] = [lowlim,upplim]
+                else:
+                    parampriors[par] = defaultpriors[par]
+            elif par == "ffac":
+                if fitLogfSpotFac[1]:
+                    lowlim = hyperp_logpriors[0]
+                    upplim = hyperp_logpriors[1]
+                    parampriors["log_"+par] = [lowlim,upplim]
+                else:
+                    parampriors[par] = defaultpriors[par]
+            else:
+                parampriors[par] = defaultpriors[par]
+                
+                
+                
+                
     for par in param:
         if par in gaussparanames:
             ind_gaussparam = np.where(gaussparanames == par)[0][0]
-            new_prior = [np.max([mean_Gauss_para[ind_gaussparam] - 5.*std_Gauss_para[ind_gaussparam], parampriors[par][0]]), np.min([mean_Gauss_para[ind_gaussparam] + 5.*std_Gauss_para[ind_gaussparam], parampriors[par][1]])]
+            mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
+            std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
+            new_prior = [np.max([mean_gaussparam - 5.*std_gaussparam, parampriors[par][0]]), np.min([mean_gaussparam + 5.*std_gaussparam, parampriors[par][1]])]
             # pdb.set_trace()
             parampriors[par] = new_prior
     # pdb.set_trace()
     return parampriors
 
-def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, T_grid, logg_grid, Fscale_guess):
+def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+            fitLogfSpotFac, hyperp_logpriors, T_grid, logg_grid, Fscale_guess):
     """
     log-prior function
 
@@ -438,7 +496,9 @@ def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gau
         param[paraname] = theta[i]
     param = get_derived_param(param)
     
-    parampriors = get_param_priors(param, gaussparanames, mean_Gauss_para=mean_Gauss_para, std_Gauss_para=std_Gauss_para, T_grid=T_grid, logg_grid=logg_grid, Fscale_guess=Fscale_guess)
+    parampriors = get_param_priors(param, gaussparanames, hyperp_gausspriors=hyperp_gausspriors, 
+                                   fitLogfSpotFac=fitLogfSpotFac, hyperp_logpriors=hyperp_logpriors,
+                                   T_grid=T_grid, logg_grid=logg_grid, Fscale_guess=Fscale_guess)
     for i, paraname in enumerate(fitparanames):
         # print("Prior on", paraname)
         # print("lp:", lp)
@@ -447,8 +507,11 @@ def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gau
             # print("Parampriors for this para:", parampriors[paraname])
             if paraname in gaussparanames:
                 ind_gaussparam = np.where(gaussparanames == paraname)[0][0]
+                mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
+                std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
                 # ind_gaussparam = np.where(list(gaussparanames) == paraname)
-                lp = lp - 0.5*((theta[i]-mean_Gauss_para[ind_gaussparam])**2./(std_Gauss_para[ind_gaussparam]**2.))
+                lp = lp - 0.5*((theta[i]-mean_gaussparam)**2./(std_gaussparam**2.))
+
             else:
                 lp = lp + 0.0
         else:
@@ -459,11 +522,12 @@ def lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gau
 
     return lp
 
-def lnprob(theta, spec, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, models_baseline_fixR, T_grid, logg_grid, 
+def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+           fitLogfSpotFac,hyperp_logpriors,models_baseline_fixR, T_grid, logg_grid, 
            model_wv,models_grid_fixR, Fscale_guess):
     
-    lp = lnprior(theta, param, fitparanames, gaussparanames, mean_Gauss_para, std_Gauss_para, 
-                 T_grid, logg_grid, Fscale_guess)
+    lp = lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors, 
+                 fitLogfSpotFac,hyperp_logpriors,T_grid, logg_grid, Fscale_guess)
     
     if not np.isfinite(lp):
         # return -np.inf, np.zeros_like(np.array(spec.yval)) * np.nan
@@ -562,6 +626,8 @@ def chainplot(samples,labels=None,nwalkers=None,fontsize=None,lw=1,stepRange=Non
         
     return fig,axes    
 
+#%% Saving
+
 def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparanames, save_fit):
     # write csv file and astropy table with samples outside of burn-in
     samples = pd.DataFrame(sampler.chain[:, burnin:, :].reshape((-1, ndim)),
@@ -619,6 +685,25 @@ def samp2bestfit(samp):
     bestfit['+2sigma'] = bestfit['97.5'] - bestfit['50']
 
     return bestfit, ind_bestfit, ind
+
+def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, results_folder, runname, save_fit=True):
+    # create a dictionary that collates all the best-fit information
+    print("Saving stats on the best fit...")
+    bestfit_stats = dict()
+    best_model = flat_oot_spec_models[ind_bestfit]
+    nPara = len(fitparanames)
+    nDataPoints = len(spec["yval"])
+    n_dof = nDataPoints - nPara
+    bestfit_stats["ind_postburnin"] = ind_bestfit
+    bestfit_stats["chi2"] = np.sum((spec['yval']-best_model)**2./spec["yerrLow"]**2.)
+    bestfit_stats["redchi2"] = bestfit_stats["chi2"]/n_dof
+    bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"] ,nDataPoints,nPara)
+    t_bestfit_stats = table.Table([bestfit_stats])
+    
+    if save_fit:
+        print("Writing to file...")
+        aio.ascii.write(t_bestfit_stats, results_folder+"exotune_bestfit_stats_"+runname+'.csv', format='csv', overwrite=True)
+
 
 def get_exotune_blobs(exotune_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 97.7, 99.8]):
  
@@ -771,7 +856,11 @@ def get_labels_from_fitparanames(fitparanames):
         if p == "fspot":
             labels.append(r"$f_\mathrm{spot}$")
         elif p == "ffac":
-            labels.append(r"$f_\mathrm{fac}$")        
+            labels.append(r"$f_\mathrm{fac}$")  
+        elif p == "log_fspot":
+            labels.append(r"$\log_{10} f_\mathrm{spot}$")
+        elif p == "log_ffac":
+            labels.append(r"$\log_{10} f_\mathrm{fac}$") 
         elif p == "deltaTfac":
             labels.append(r"$\Delta T_\mathrm{fac} [K]$")           
         elif p == "deltaTspot":
