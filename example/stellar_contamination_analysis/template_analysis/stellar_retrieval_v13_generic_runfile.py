@@ -60,6 +60,8 @@ elif which_visit == "2":
 
 spec_format = "wavemicrons" # create a new one in pytransspec.py if needed. Current options: ["basic", "wavemicrons"]]
 
+# choose suffix for all the files produced by this fit
+res_suffix="TRAPPIST_1_c_example"
 
 ## --- User inputs: Stellar parameters --- #
 if which_star == "TRAPPIST-1":  ## copy this block of code for another star if needed!
@@ -122,8 +124,7 @@ logg_phot_value = 5
 logg_het_default_source = "logg_phot" # options: "value", "logg_phot"
 logg_het_value = 5
 
-# choose suffix for all the files produced by this fit
-res_suffix="TRAPPIST_1_c_example"
+
 
 ## --- User inputs: Read in stellar models grid --- #
 
@@ -222,7 +223,7 @@ if 1:
     runname = "fit"
     for p in fitparanames:
         runname = runname + "_"+p
-    runname = runname + res_suffix
+    runname = runname + "_"+ res_suffix
     results_folder = "../../stellar_contamination_results/"+runname+"/"   
     print("Results folder:", results_folder)
     
@@ -234,13 +235,31 @@ if 1:
     
     #** Get .py files used to run this case
     this_dir = os.getcwd()+"/"
+
     res_dir = os.sep.join(__file__.split(os.sep)[:-2]) + "/../stellar_contamination_results/"+runname+"/"
+    utils_script = str(sru.__file__)
+
     this_script = __file__.split(os.sep)[-1]
-    script_name = "runscript.py"
+
+    script_name = "stellar_retrieval_runfile_thisrun.py"
+    utils_script_name = "stellar_retrieval_utilities_thisrun.py"
+
     print("\nSaving files...")
-    print("\nThis file:", this_dir+this_script)
+    print("\n--Run-analysis file...")
+    print("\n**This file:", this_dir+this_script)
     print("Saved to file:", res_dir+script_name)
     shutil.copy(this_dir+this_script, res_dir+script_name)
+    print("... Done.**")
+
+    print("\n--Utilities file...")
+
+    print("\n**This file:", utils_script)
+    print("Saved to file:", res_dir+utils_script_name)
+
+    shutil.copy(utils_script, res_dir+utils_script_name)
+    print("... Done.**")
+
+
 
 
 ## --- Plot observed spectrum --- #
@@ -346,8 +365,8 @@ if sample_spectra is None:
     ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
     
     if save_fit:
-        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     sru.xspeclog(ax,level=1)
     if save_fit:
         fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
@@ -369,8 +388,8 @@ else:
     ax.set_xlim(np.min(spec["waveMin"])-pad/2, np.max(spec["waveMax"])+pad)
 
     if save_fit:
-        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     sru.xspeclog(ax,level=1)
     if save_fit:
         fig.savefig(results_folder + "stctm_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
@@ -418,7 +437,7 @@ if 1:
     fig, ax = sru.plot_stctm_blobs(spec, st_ctm_models,
                               ind_bestfit,
                               bestfit_color = 'k', color="coral",
-                              plot2sig=True, plot1sig=True, plotmedian=True,
+                              plot3sig=True,plot2sig=True, plot1sig=True, plotmedian=True,
                               plotbestfit=True, legend_loc=4, save_csv=True,
                               results_folder=results_folder, runname=runname)
 
@@ -426,12 +445,12 @@ if 1:
     ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
 
     if save_fit:
-        fig.savefig(results_folder+"stctm_1_2_sigma_noprint"+runname+".pdf")
+        fig.savefig(results_folder+"stctm_1_2_3_sigma_noprint"+runname+".pdf")
 
     if save_fit:
-        fig.savefig(results_folder+"stctm_1_2_sigma_"+runname+".png")
+        fig.savefig(results_folder+"stctm_1_2_3_sigma_"+runname+".png")
 
-sys.exit()  
+# sys.exit()
 
 
 ## Plot amplitude
@@ -446,7 +465,7 @@ if 1: # v1: for the paper
     sru.plot_stctm_blobs(spec, st_ctm_models,
                               ind_bestfit,ax=ax, 
                               bestfit_color = 'k', color="coral",
-                              plot2sig=True, plot1sig=True, plotmedian=True,
+                              plot2sig=True,plot3sig=True, plot1sig=True, plotmedian=True,
                               plotbestfit=True, legend_loc=4)
     ax.set_ylabel(r'Transit Depth [ppm]')
     sru.xspeclog(ax,level=1)
@@ -468,7 +487,7 @@ if 1: # v1: for the paper
 
     ax2.set_ylim(ymin=0)
     if save_fit:
-        fig.savefig(results_folder+"stctm_1_2_sigma_withamplitude_noprint"+runname+".pdf")
+        fig.savefig(results_folder+"stctm_1_2_3_sigma_withamplitude_noprint"+runname+".pdf")
 
 
 

@@ -17,7 +17,7 @@ from copy import deepcopy
 import warnings
 
 
-#%%
+## Object definition
 
 class TransSpec(Table):  
     def __init__(self,inputpath,inputtype='basic',label="Transmission spectrum",color="k",

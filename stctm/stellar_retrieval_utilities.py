@@ -845,9 +845,10 @@ def format_param_str(param, fitparanames):
     """
     param = get_derived_param(param)
 
-    str1 = "Fitted params: "+str(fitparanames)+"\n"
+    # str1 = "Fitted params: "+str(fitparanames)+"\n"
+    str1 = "\n"
     str1 = str1 + "Stellar params: Tphot="+str(int(param["Tphot"]*10.)/10.)+" met="+str(param["met"]) + "\n"
-    str1 = str1 + "logg_phot="+str(param["logg_phot"]) + " logg_het="+str(param["logg_het"])+ "\n"
+    str1 = str1 + "logg_phot="+str(int(param["logg_phot"]*100)/100) + " logg_het="+str(int(param["logg_het"]*100)/100)+ "\n"
     str1 = str1 + "Tspot="+str(int(param["Tspot"]*10.)/10.)+" Tfac="+str(int(param["Tfac"]*10.)/10.)+"\n"
     str1 = str1 + "fspot=" + str(int(param["fspot"]*10000.)/10000.) + " ffac="+str(int(param["ffac"]*10000)/10000.)
     return str1
@@ -988,13 +989,14 @@ def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparan
        
     # save best fit parameters and quantiles
     bestfit, ind_bestfit, ind_maxprob = samp2bestfit(panda)
-    print(bestfit)
+    # print(bestfit)
     if save_fit:
         bestfit.to_csv(results_folder+'stctm_bestfit_'+runname+'.csv')
         
     # make corner plot
     print("\nMax Likelihood:\n")
     print(bestfit["MaxLike"])
+    print("\n")
     
     parabestfit = np.array(bestfit["MaxLike"][2:])
     return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
@@ -1020,7 +1022,7 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, resu
 
     """
     # create a dictionary that collates all the best-fit information
-    print("Saving stats on the best fit...")
+    print("\nSaving stats on the best fit...")
     bestfit_stats = dict()
     best_model = flat_st_ctm_models[ind_bestfit]
     nPara = len(fitparanames)
@@ -1033,7 +1035,7 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, resu
     t_bestfit_stats = table.Table([bestfit_stats])
     
     if save_fit:
-        print("Writing to file...")
+        print("\nWriting to file...")
         aio.ascii.write(t_bestfit_stats, results_folder+"stctm_bestfit_stats_"+runname+'.csv', format='csv', overwrite=True)
 
 ##  Plotting
@@ -1324,13 +1326,13 @@ def plot_stctm_samples_res(spec, param, fitparanames,
         
         # calculate array of sample spectra
         sample_spectra = np.zeros((N_samp, wv_array.size))
-       
+        print("Calculating sample spectra for plotting...")
         for i in range(N_samp):
             if i%100 == 0:
                 print("i=", i+1, "/", N_samp)
             theta = post_burnin_samples.iloc[ind_samples[i]]
             for j, paraname in enumerate(fitparanames):
-                param[paraname] = theta.loc[j]
+                param[paraname] = theta.loc[paraname]
             param = get_derived_param(param)
             
             ind_Tspot = np.argmin(np.abs(T_grid-param["Tspot"]))
@@ -1357,7 +1359,7 @@ def plot_stctm_samples_res(spec, param, fitparanames,
     # calculate spectrum for best-fit parameters
     theta = post_burnin_samples.iloc[ind_bestfit]
     for i, paraname in enumerate(fitparanames):
-        param[paraname] = theta.loc[i]
+        param[paraname] = theta.loc[paraname]
     param = get_derived_param(param)
     
     ind_Tspot = np.argmin(np.abs(T_grid-param["Tspot"]))
@@ -1388,7 +1390,7 @@ def plot_stctm_samples_res(spec, param, fitparanames,
         fig, ax = spec.plot()
     else:
         fig = None
-        spec.plot(ax=ax)
+        spec.plot(ax=ax,zorder=lowest_z+3)
 
     lowest_z = 1000
 
@@ -1409,7 +1411,7 @@ def plot_stctm_samples_res(spec, param, fitparanames,
         ax.plot(wv_array,stctm_best,color=bestfit_color,zorder=lowest_z+2,label=r'Max. likelihood')
 
     
-    ax.legend(loc=legend_loc)
+    ax.legend(loc=legend_loc,ncol=2)
     
     if save_csv:
         dct = dict()
@@ -1542,7 +1544,7 @@ def plot_stctm_amplitude(spec, stctm_models_blobs,
 
 # corner plot function
 def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
-                        quantiles=[0.16, 0.5, 0.84], title_kwargs={'fontsize':14},
+                        quantiles=[0.16, 0.5, 0.84], title_kwargs={'fontsize':12},
                         hist_kwargs={"linewidth":3}, rg=None, 
                         show_titles=True, levels=(0.393,0.865,0.989), **kwargs):
     """
@@ -1682,7 +1684,7 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
     ax.scatter(spec['wave'], flat_st_ctm_models[ind_maxprob], label="Max. Probability", color="slateblue", alpha=1.)
     ax.scatter(spec['wave'], flat_st_ctm_models[ind_bestfit], label="Max. Likelihood", color="r", alpha=0.5, marker=".", s=50)
 
-    ax.text(np.min(spec["waveMin"])-pad/4, 1.08*np.median(spec['yval']), format_param_str(param_bestfit, fitparanames), fontsize=10, fontweight="bold", color="k")
+    ax.text(np.min(spec["waveMin"])-pad/4, 1.08*np.median(spec['yval']), format_param_str(param_bestfit, fitparanames), fontsize=10, color="k")
 
     ax.set_xlim(np.min(spec["waveMin"])-pad/2, np.max(spec["waveMax"])+pad)
     ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
