@@ -1,3 +1,5 @@
+<img src="docs/figures/logo.png" width="256px"/>
+
 # stctm
 *stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components. 
 
