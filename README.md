@@ -1,6 +1,6 @@
 <img src="docs/figures/stctm_logo.png" width="256px"/>
 
-# stctm
+# Welcome to *stctm*!
 *stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components. 
 
 If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
