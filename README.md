@@ -170,12 +170,13 @@ Under ```User inputs: Read in stellar models grid```, modify the range and spaci
 By default, the code will produce (and save to the results folder):
 
 Inputs to the code:
+
 * a copy of the run file that was used
 * a copy of the version of ```stellar_retrieval_utilities.py``` that was used
 * a figure displaying the spectrum being fitted
 * ```defaultparams```: CSV file with the default parameters used to initialize the fit
 
-### Outputs of the code
+Outputs of the code:
 
 CSV files:
 * ```pandas``` file: fitted parameters from the chain, with the associated log likelihood and log probability values
@@ -198,15 +199,14 @@ Please let me know if other things would be useful for you to have as default ou
 
 ## *exotune*: Retrievals on stellar spectra
 
-You can fit any stellar spectrum (loaded into the code as a ```pyStellSpec``` object) assuming it can be represented by a linear combination of 1-3 components: the photosphere, cooler regions (spots), and hotter regions (faculae). In the current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
+You can fit any stellar spectrum (loaded into the code as a ```pyStellSpec``` object) assuming it can be represented by a linear combination of 1-3 components: the photosphere, cooler regions (spots), and hotter regions (faculae). In the current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots. *exotune* can also be run in parallel on multiple core, which enables extremely fast inferences on large computing clusters despite the typically larger number of points in a stellar spectrum dataset.
 
 ### Setting up a retrieval
 
 In the way it is currently set up, *exotune* retrievals require entering the user inputs directly in the run script (top sections). I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
 
-(!! the information below is copy-pasted from the TLS-retrieval version of the code. I am working my way through better documentation.)
 #### File and environment paths
-The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```stellar_retrieval_v13_generic_runfile.py```), resides. However, relative paths matter as the results folder will reside in ```../../stellar_contamination_results/``` (run-specific results folder automatically created by the code). 
+The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```exotune_runscript_v3_clean_20250409.py```), resides. However, relative paths matter as the results folder will reside in ```../../exotune_results/``` (run-specific results folder automatically created by the code). 
 
 Make sure that your environment paths are set up properly.
 Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
@@ -219,29 +219,59 @@ or in the code of the analysis file itself:
     import os
     os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
 
+#### Preprocessing options
 
-#### Setting up labels and path to spectrum file
-Under ```User inputs: Spectrum and labels``` you can set up:
-* ```label``` (used for plotting)
-* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```pyTransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
-* ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
+Contrary to its TLS counterpart, *exotune* can do a bit more when it comes to preprocessing. Namely, you can choose to either provide as an input:
+1. A time series of stellar spectra
+2. A unique stellar spectrum
+
+In scenario 1) (starting from a time series of spectra), the user can decide which time intervals to discard when constructing the spectrum.
+* The user may want to use the option to discard selected time intervals to omit spectra that were taken during the transit when constructing the out-of-transit spectrum, or spectra that are associated with flare events.
+* There is also the possibility to ignore certain wavelength intervals, e.g. if they are affected by saturation or contamination.
+
+The current implementation supports the hdf5 files that are the Stage 3 outputs from Eureka!, but other formats can be implemented as well depending on your needs, by editing the code block under ```# Reading in the observed spectrum``` to obtain the 2D time series of spectra.
+
+In scenario 2), the assumption is that the spectrum is in the units of erg/s/cm$^2$/$\mu$m, and you will need to specify ```spec_format```, which is used by the ```pyStellSpec``` object to know how to read in your file. If the options provided in ```stctm/pystellspec.py``` do not match your needs, feel free to add one with a different name! 
+
+
+Input spectrum file:
+
+* Use ```label_obs``` to define a new setting in terms of where to look for your input files - whether you start from a time-series of spectra, setting ```start_from_timeseries``` to ```True```, or not. You will need to fill the paths under the first ```if start_from_timeseries:``` statement (line ~53) with the relevant information.
+* If you set ```start_from_timeseries=True```, then you can save to a csv file the stellar spectrum that will be created by the preprocessing steps. Just set ```save_median_spectrum=True```, and specify the path to the file where the spectrum should be saved as ```path_save_median_spectrum```.
+
+Selecting preprocessing choices (only actually matters if you selected ```start_from_timeseries=True```):
+
+You will need to specify an ```obsmaskpattern```, which is essentially a label for a set of preprocessing choices (set under the corresponding ```if obsmaskpattern == "XXX"``` statement). These include:
+* ```kern_size```: if set to ```None```, ignored. Otherwise, size of the median-filtering kernel applied prior to plotting of the median-normalized light curve (in order to help with identifying the transit start/end times for instance).
+* ```jd_range_mask```: leave as an empty list to use all spectra, or alternatively set to a list of arrays (or lists), each containing the ```[start_time, end_time]``` of the time window to discard prior to constructing the spectrum.
+* ```wave_range_mask```: same thing, for the wavelength axis.
 
 #### Setting up the stellar parameters
 
 Under ```User inputs: Stellar parameters```, enter the parameters of the star to set the defaults for the fit. Make sure that you have an option ("if" statement) matching the ```which_star``` setting you entered above.
 
+#### Reading in the grid of stellar models
+
+Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid, and make sure you are pointing to the right file path.
+
 #### Choosing the setup of your retrieval
 
+Contrary to the TLS retrieval, with *exotune* you have the option to *only* do the pre-processing. That can be interesting for instance if you'd just like to take a look at the median-filtered light curve to identify which integrations to ignore, before settling on your final setup for the fit. In any case, if you set ```optimize_param``` to ```True```, the plots will be created but the code will stop short of running the retrieval.
+
 Under ```User inputs: MCMC fitting params``` you can choose:
+* ```parallel```: if set to ```True```, then the MCMC will be run in parallel on a number of CPUs specified by the ```ncpu``` parameter right below (by default, 30)
 * ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
 * ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
 * ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
 * ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
 * ```fitThet```: ```True``` if you want to fit for the temperature of unocculted spots and/or faculae, ```False``` otherwise.
 * ```fitTphot```: ```True``` if you want to fit for the temperature of the photosphere, ```False``` otherwise.
-* ```fitDscale```: ```True``` if you want to fit for the bare-rock transit depth (recommended), ```False``` otherwise.
 * ```fitlogg_phot```: ```True``` if you want to fit the photosphere log g, ```False``` otherwise.
-* ```fitlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
+* ```fitdlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
+
+The following parameters aim at accounting for the fact that the models need to be scaled to match your spectrum, as well as the imperfection of stellar models which often lead to large chi-squared differences between model and data.
+* ```fitFscale```: ```True``` if you want to fit a scaling factor to the model flux (recommended), ```False``` otherwise.
+* ```fiterrInfl```: ```True``` if you want to fit an error inflation factor to the provided data error bars (recommended), ```False``` otherwise.
 * ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
 
 #### Priors and default values
@@ -265,18 +295,11 @@ The spot/faculae covering fractions can also be fitted with priors that are unif
 * Set the first/second element to 1 instead to use a log-uniform priors on ```fspot```(```ffac```).
 * If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = [lower_bound, upper_bound]```.
 
-If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```stellar_retrieval_utilities.py```.
+If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```exotune_utilities.py```.
 
-Default values for the stellar and heterogeneity log g:
+* ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g by default, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
 
-* ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
-* ```logg_het_default_source```: ```value``` to use the value of ```logg_het_value``` as the heterogeneities (default, if fitted) log g, otherwise ```logg_phot``` to set it to the same value as the stellar photosphere log g.
-
-
-#### Reading in the grid of stellar models
-
-Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
-
+* ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
 
 ## Citation
 
