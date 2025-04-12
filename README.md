@@ -193,6 +193,8 @@ CSV files:
 * ```fixedR_1_2_3_sigma``` file: a csv file containing a set of models at the resolving power ```target_resP``` (R=100 by default) corresponding to the max-likelihood, max-probability samples, and percentiles
 * ```blobs_1_2_3_sigma``` file: a csv file containing a set of models integrated within the bins of the observed spectrum corresponding to the max-likelihood, max-probability samples, and percentiles
 
+NPY file: contains the "blobs": the series of models computed by the MCMC.
+
 Diagnostics figures:
 * ```chainplot```: chain plots, with and without the burn-in steps
 * ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted
@@ -328,6 +330,10 @@ Inputs to the code:
 * a figure displaying the spectrum being fitted
 * ```defaultparams```: CSV file with the default parameters used to initialize the fit
 
+Pre-processing:
+* ```select_time```: median-filtered light curve with the time intervals taken out of the time series before computing the median spectrum to be used highlighted as shaded regions.
+* ```select_wave```: median spectrum before the wavelength regions are taken out, with any wavelength intervals excluded shown as shaded regions.
+* ```get_fscale```: data superimposed with the model used to get the initial guess on ```Fscale```, at full-res and binned to the data resolution.
 Outputs of the code:
 
 CSV files:
@@ -336,6 +342,8 @@ CSV files:
 * ```bestfit_stats``` file: model comparison statistics: index of the best-fit model (in the post-burnin samples), the corresponding (reduced) chi-squared value, and BIC
 * ```fixedR_1_2_3_sigma``` file: a csv file containing a set of models at the resolving power ```target_resP``` (R=100 by default) corresponding to the max-likelihood, max-probability samples, and percentiles
 * ```blobs_1_2_3_sigma``` file: a csv file containing a set of models integrated within the bins of the observed spectrum corresponding to the max-likelihood, max-probability samples, and percentiles
+
+NPY file: contains the "blobs": the series of models computed by the MCMC.
 
 Diagnostics figures:
 * ```chainplot```: chain plots, with and without the burn-in steps
