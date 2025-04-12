@@ -1512,18 +1512,10 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param):
         # ordered_samples = np.zeros((samples.shape[0],samples.shape[1]-1))
     # else:
     ordered_samples = np.zeros((samples.shape[0],samples.shape[1]))
-    # ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "logg_het", "Tphot", "logFscale"]
-    ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "dlogghet", "Tphot", "loggphot", "logFscale","logErrInfl"]
-    # ordered_fitparanames_all = ["fspot", "deltaTspot", "ffac", "deltaTfac", "dlogghet", "Tphot", "loggphot", "logFscale"]
+    ordered_fitparanames_all = ["fspot", "log_fspot","deltaTspot", "ffac", "log_ffac", "deltaTfac", "dlogghet", "Tphot", "loggphot", "logFscale","logErrInfl"]
     ordered_fitparanames = []
     ind = np.where(np.array(fitparanames)=="logFscale")
     Fscale_guess =  10**parabestfit[ind[0][0]]
-    # for nice plotting
-    # param = dict()
-    # ind = np.where(np.array(fitparanames)=="Tphot")
-    # param["Tphot"] = parabestfit[ind[0][0]]
-    # ind = np.where(np.array(fitparanames)=="loggphot")
-    # param["loggphot"] = parabestfit[ind[0][0]]
     parampriors = get_param_priors(param,[],Fscale_guess=Fscale_guess)
     
     ordered_rgs = [] # ranges for each parameter
@@ -1534,7 +1526,6 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param):
     ordered_parabestfit = np.zeros_like(parabestfit)
     for i, p in enumerate(ordered_fitparanames):
         ind = np.where(np.array(fitparanames)==p)
-        # print(ind)
         ordered_samples[:,i] = np.array(samples)[:, ind[0][0]]
         ordered_parabestfit[i] = parabestfit[ind[0][0]]
         # std_samples = np.nanstd(ordered_samples[:,i])
@@ -1553,7 +1544,12 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param):
     plotparams["hist_color"] = "C0"
     plotparams["labels"] = get_labels_from_fitparanames(ordered_fitparanames)
 
-    fig = plot_corner(ordered_samples, plotparams, smooth=0.8, fill_contours=True, 
+    print("\nSanity check:")
+    print("Shape of ordered_samples:",ordered_samples.shape)
+    print("len of labels:",len(plotparams["labels"]))
+
+    print("\nProceed to plotting:")
+    fig = plot_corner(ordered_samples, plotparams, smooth=0.8, fill_contours=True,
                       truths = ordered_parabestfit, truth_color="k")
     # fig = plot_corner(ordered_samples[:,ind], plotparams, smooth=0.8, fill_contours=True, 
     #                   truths = ordered_parabestfit[ind], truth_color="k")    
