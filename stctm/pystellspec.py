@@ -7,24 +7,12 @@ Created on Thu Jun 13, 2024
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
-import astropy.io as aio
 import stctm.stellar_retrieval_utilities as sru
 
 import pandas as pd
 import os        
 from astropy.table import Table
-import astropy.io.fits as pf
 
-from scipy.optimize import minimize
-from scipy import stats
-
-import collections
-from copy import deepcopy
-
-import warnings
-
-jdref=2450000
-big=1e10
 
 
 ## Class definition
