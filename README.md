@@ -111,7 +111,7 @@ or in the code of the analysis file itself:
 #### Setting up labels and path to spectrum file
 Under ```User inputs: Spectrum and labels``` you can set up:
 * ```label``` (used for plotting)
-* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```pyTransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
+* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```TransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
 * ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
 
 #### Setting up the stellar parameters
@@ -165,7 +165,15 @@ Default values for the stellar and heterogeneity log g:
 
 Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
 
-#### Post-processing
+### Running a TLS retrieval
+
+Once you have set up all the parameters in the run file, navigate to your ```stellar_contamination_analysis/``` directory and simply run
+
+    python stellar_retrieval_v13_generic_runfile.py
+
+(replacing with the name of your run script).
+
+### Post-processing
 
 By default, the code will produce (and save to the results folder):
 
@@ -300,6 +308,46 @@ If you wish to change the way the prior is set up on any of the fitted parameter
 * ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g by default, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
 
 * ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
+
+### Running an *exotune* retrieval
+
+Once you have set up all the parameters in the run file, navigate to your ```exotune_analysis/``` directory and simply run
+
+    python exotune_runscript_v3_clean_20250409.py
+
+(replacing with the name of your run script).
+
+### Post-processing
+
+By default, the code will produce (and save to the newly-created results folder under ```exotune_results/```):
+
+Inputs to the code:
+
+* a copy of the run file that was used
+* a copy of the version of ```exotune_utilities.py``` that was used
+* a figure displaying the spectrum being fitted
+* ```defaultparams```: CSV file with the default parameters used to initialize the fit
+
+Outputs of the code:
+
+CSV files:
+* ```pandas``` file: fitted parameters from the chain, with the associated log likelihood and log probability values
+* ```bestfit``` file: for each parameter, the best-fit value (maximum likelihood), the max-probability values, as well as percentiles which can be used for quoting in tables
+* ```bestfit_stats``` file: model comparison statistics: index of the best-fit model (in the post-burnin samples), the corresponding (reduced) chi-squared value, and BIC
+* ```fixedR_1_2_3_sigma``` file: a csv file containing a set of models at the resolving power ```target_resP``` (R=100 by default) corresponding to the max-likelihood, max-probability samples, and percentiles
+* ```blobs_1_2_3_sigma``` file: a csv file containing a set of models integrated within the bins of the observed spectrum corresponding to the max-likelihood, max-probability samples, and percentiles
+
+Diagnostics figures:
+* ```chainplot```: chain plots, with and without the burn-in steps
+* ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted
+
+Publication-ready figures:
+* ```1_2_3_sigma_withamplitude``` file: same as ```1_2_3_sigma``` but with a lower panel showing the amplitude of the stellar contamination signature across wavelength in the spectrum (in absolute terms)
+* ```resP..._1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis.
+* ```1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models all integrated within the same bins as the data, with a log or lin scale for the wavelength axis.
+* a corner plot of post-burnin samples
+
+Please let me know if other things would be useful for you to have as default outputs, or feel free to create pull requests with your nice additions!
 
 ## Citation
 
