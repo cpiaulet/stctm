@@ -342,8 +342,8 @@ Diagnostics figures:
 * ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted
 
 Publication-ready figures:
-* ```1_2_3_sigma_withamplitude``` file: same as ```1_2_3_sigma``` but with a lower panel showing the amplitude of the stellar contamination signature across wavelength in the spectrum (in absolute terms)
 * ```resP..._1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis.
+* ```combo_resP..._1_2_3_sigma``` files: combo plots. At the top, fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis. At the bottom, relevant marginalized posterior distributions on stellar spectrum component parameters.
 * ```1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models all integrated within the same bins as the data, with a log or lin scale for the wavelength axis.
 * a corner plot of post-burnin samples
 
