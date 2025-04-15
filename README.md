@@ -346,8 +346,8 @@ CSV files:
 NPY file: contains the "blobs": the series of models computed by the MCMC.
 
 Diagnostics figures:
-* ```chainplot```: chain plots, with and without the burn-in steps
-* ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted
+* ```chainplot```: chain plots, with and without the burn-in steps.
+* ```bestfit_model``` file: a plot of the best-fit model, integrated to match the bins in the observed spectrum, with the best-fit parameter values quoted.
 
 Publication-ready figures:
 * ```resP..._1_2_3_sigma``` files: fitted spectrum with the results of the fit (max-likelihood, max-probability samples, and +/- 1, 2, 3 sigma), with stellar models at higher resolution (resolving power ```target_resP```), with a log or lin scale for the wavelength axis.
