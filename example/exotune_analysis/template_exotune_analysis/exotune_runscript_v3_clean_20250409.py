@@ -33,24 +33,22 @@ import h5py
 import sys
 import astropy.io as aio
 import shutil
-
+from copy import deepcopy
 from multiprocessing import Pool
 import scipy.signal as sig
 from matplotlib.gridspec import GridSpec  
 
 
-##  --- User inputs --- #
 
+## User inputs: Spectrum and labels
 print("Reading in user inputs...")
-
-## User inputs: Spectrum (or time series of spectra)
 
 # label for the observation
 label_obs = "test_visit"
 
 start_from_timeseries = True # whether to start from a time series of spectra, or from a spectrum file
 save_median_spectrum = False # whether to save the median spectrum that was created from the time series
-path_save_median_spectrum = "/../observations/planetname/planet_outoftransit_spectrum.csv" # path to save the median spectrum to
+path_save_median_spectrum = "../../observations/planetname/planet_outoftransit_spectrum.csv" # path to save the median spectrum to
 
 if start_from_timeseries:
     if label_obs=="test_visit":
@@ -97,7 +95,7 @@ else:
     print("The star:", which_star, "does not have defined parameters!")
     pdb.set_trace()
 
-## User inputs: Stellar model grid
+## User inputs: stellar models grid
 
 label_grid = "PHOENIX_TRAPPIST_1"
 use_phoenix = True
@@ -110,7 +108,7 @@ if label_grid == "PHOENIX_TRAPPIST_1":
     resPower_target = 10000
     wv_min_um = 0.2
     wv_max_um = 5.4
-    stmodfile = "../R"+str(resPower_target)+"_model_grids/TRAPPIST_1_pymsg.h5"
+    stmodfile = "../../R"+str(resPower_target)+"_model_grids/TRAPPIST_1_pymsg.h5"
 
 else:
     print("The stellar model grid:", label_grid, "is not defined!")
@@ -147,10 +145,14 @@ gaussparanames = np.array([])
 hyperp_gausspriors = []
 
 # gaussparanames = np.array(["Tphot"])
-# hyperp_gausspriors = [[2566,70]]
+# hyperp_gausspriors = [[Teffstar,70]]
 
 fitLogfSpotFac = [0,1] #[spot,fac]
 hyperp_logpriors = [-5,0] #[]
+
+# Where to get the photosphere log g value from: user-specified value or pre-set loggstar
+logg_phot_source = "value" # options: "value", "loggstar"
+logg_phot_value = 2.5 # user-specified value
 
 res_suffix = "_test_for_GitHub"
 if parallel:
@@ -214,7 +216,7 @@ if start_from_timeseries:
     ax.set_title("Masked regions (TIME)")
 
 ##  Calculate median spectrum (or read in spectrum to fit) and save to spec object...
-print("\nCalculate or Read in median out-of-transit spectrum and use to initialize StellSpec object...")
+print("\nCalculate or Read in median out-of-transit spectrum and use to initialize pyStellSpec object...")
 
 if start_from_timeseries:
     print("/nCalculate median spectrum and use to initialize StellSpec object...")
@@ -309,7 +311,13 @@ print("\nFixed resolution model grid shape:", models_grid_fixedR.shape)
 ##  Visualize nominal model in grid on top of observations (scaled)
 
 # obtain all parameters from default settings
-param, fitparanames = xtu.init_default_and_fitted_param(Teffstar, feh, 2.5, fitLogfSpotFac=fitLogfSpotFac)
+# logg initial guess
+if logg_phot_source == "loggstar":
+    logg_phot = deepcopy(loggstar)
+elif logg_phot_source == "value":
+    logg_phot = deepcopy(logg_phot_value)
+
+param, fitparanames = xtu.init_default_and_fitted_param(Teffstar, feh, logg_phot, fitLogfSpotFac=fitLogfSpotFac)
 param = xtu.get_derived_param(param)
 
 print("\nGuessing Fscale value from the data...")
@@ -331,7 +339,18 @@ ax.legend(loc=1)# get nominal model from default parameters
 
 ##  Stop here if you just wanted to update your data selection
 if optimize_param:
+    this_dir = os.getcwd()+"/"
+    print("\nSaving previously-created figures...")
+    if start_from_timeseries:
+        fig1.savefig(this_dir + "exotune_select_time_"+res_suffix+'_preprocessOnly.png')
+    fig2.savefig(this_dir + "exotune_select_wave_"+res_suffix+'_preprocessOnly.png')
+    plt.close(fig1)
+    plt.close(fig2)
+    fig3.savefig(this_dir + "exotune_get_fscale_"+res_suffix+'_preprocessOnly.png')
+    plt.close(fig3)
+
     print("\nStopping here, parameters were optimized!")
+
     sys.exit()
 
 ##  Initialize for MCMC
@@ -352,14 +371,13 @@ if 1:
     for p in fitparanames:
         runname = runname + "_"+p
     runname = runname + res_suffix
-    res_dir = "../exotune_results/"+runname+"/"   
+    res_dir = "../../exotune_results/"+runname+"/"
     print("\nResults folder:", res_dir)
     
     # Setup for post-processing
     if not os.path.isdir(res_dir):
        os.makedirs(res_dir)
-       
-    
+
     # Save previously-created figures
     print("\nSaving previously-created figures...")
     if start_from_timeseries:
@@ -729,15 +747,15 @@ if sample_spectra is None:
                               bestfit_color = 'k', color="coral",plot3sig=True,
                               plot2sig=True, plot1sig=True, plotmedian=True,
                               plotbestfit=True, legend_loc=4, save_csv=True, 
-                              res_dir=res_dir, runname=runname)
+                              results_folder=res_dir, runname=runname)
 
 
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
     # ax.set_ylim(0.8*np.median(spec.yval), 1.15*np.median(spec.yval))
     
     if save_fit:
-        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     xtu.xspeclog(ax,level=1)
     if save_fit:
         fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
@@ -760,8 +778,8 @@ else:
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
 
     if save_fit:
-        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     xtu.xspeclog(ax,level=1)
     if save_fit:
         fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
@@ -790,7 +808,7 @@ if 1:
         plt.close(fig)
 
     print("\nComputing statistics (chi-squared, BIC) on the run results...")
-    xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, 
+    xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models,
                            res_dir, runname, save_fit=save_fit)
     
             
@@ -801,6 +819,26 @@ if 1:
 
     oot_spec_models = np.array([flat_oot_spec_models[i] for i in range(flat_oot_spec_models.size)])
 
+## plot 1,2,3 sigma with blobs
+
+if 1:
+    fig, ax = xtu.plot_exotune_blobs(spec, oot_spec_models,
+                                   ind_bestfit,
+                                   bestfit_color='k', color="coral",
+                                   plot3sig=True, plot2sig=True, plot1sig=True, plotmedian=True,
+                                   plotbestfit=True, legend_loc=4, save_csv=True,
+                                   results_folder=results_folder, runname=runname)
+
+    ax.set_xlim(np.min(spec["waveMin"]) - pad / 2, np.max(spec["waveMax"]) + pad)
+    ax.set_ylim(0.8 * np.median(spec['yval']), 1.15 * np.median(spec['yval']))
+
+    if save_fit:
+        fig.savefig(results_folder + "exotune_1_2_3_sigma_" + runname + ".pdf")
+
+    if save_fit:
+        fig.savefig(results_folder + "exotune_1_2_3_sigma_" + runname + ".png")
+
+# sys.exit()
 ##  joint plot
 if 1:
     print("\nCreating combo plot with spectra and parameter distributions...")
@@ -884,7 +922,9 @@ if 1:
 ##  Corner plot
 # try: #corner plot
 print("\nCreating corner plot...")
-fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit,param)
+fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit, param,
+                   gaussparanames,hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,Teffs_grid,loggs_grid)
+
 
 suffix = "_custom"
 if save_fit:

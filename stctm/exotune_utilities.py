@@ -10,9 +10,6 @@ Stellar model fitting utility functions
 ## ------------------- Import modules ------------------#
 import os
 
-os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
-os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
-os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -760,8 +757,8 @@ def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors,
                  fitLogfSpotFac, hyperp_logpriors, T_grid, logg_grid, Fscale_guess)
 
     if not np.isfinite(lp):
-        # return -np.inf, np.zeros_like(np.array(spec.yval)) * np.nan
-        return -np.inf
+        return -np.inf, np.zeros(len(spec[2])) * np.nan
+        # return -np.inf
     else:
 
         lnlk, model = lnlike(theta, param, fitparanames, spec, models_baseline_fixR, T_grid,
@@ -1229,6 +1226,106 @@ def chainplot(samples, labels=None, nwalkers=None, fontsize=None, lw=1, stepRang
 
     return fig, axes
 
+
+def plot_exotune_blobs(spec, oot_models_blobs,
+                     ind_bestfit, ax=None,
+                     bestfit_color='k', color="b",
+                     plot3sig=True, plot2sig=True, plot1sig=True, plotmedian=True,
+                     plotbestfit=True, legend_loc=1, save_csv=False,
+                     results_folder="", runname=""):
+    """
+    Plot spectra obtained from the retrieval with uncertainty from blobs.
+
+    Parameters
+    ----------
+    spec: TransSpec object
+        (planet atmosphere observations in transmission)
+    oot_models_blobs : array-like
+        array of model outputs sampled from the posterior distribution.
+    ind_bestfit : int
+        Index of the max-like model in `stctm_models_blobs`
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axis object to plot on. If None, a new axis is created.
+    bestfit_color : str, default 'k'
+        Color used to plot the best-fit model.
+    color : str, default 'b'
+        Color used for median, 1, 2, 3 sigma contours.
+    plot3sig : bool, default True
+        If True, plot the 3-sigma uncertainty region.
+    plot2sig : bool, default True
+        If True, plot the 2-sigma uncertainty region.
+    plot1sig : bool, default True
+        If True, plot the 1-sigma uncertainty region.
+    plotmedian : bool, default True
+        If True, plot the median model prediction.
+    plotbestfit : bool, default True
+        If True, plot the best-fit model.
+    legend_loc : int, default 1
+        Location of the legend in the plot (uses matplotlib legend location codes).
+    save_csv : bool, default False
+        If True, save a CSV file with the quantiles and best-fit predictions.
+    results_folder : str, optional
+        Directory path where the CSV file should be saved (if `save_csv=True`).
+    runname : str, optional
+        Base name used for the saved CSV file (if `save_csv=True`).
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axis object with the plot drawn on it.
+
+    """
+
+    # percentiles = [2.5, 16., 50., 84., 97.5]
+    percentiles = [0.2, 2.3, 15.9, 50., 84.1, 97.7, 99.8]
+
+    # for each epoch of each planet, get the median, 1 and 2sigma pred time
+    oot_percentiles = np.nanpercentile(oot_models_blobs, percentiles, axis=0)
+
+    # calc for best fit (need ind_bestfit)
+    oot_best = oot_models_blobs[ind_bestfit, :]
+    if ax is None:
+        fig, ax = spec.plot()
+    else:
+        fig = None
+        spec.plot(ax=ax)
+
+    if plot1sig:
+        ax.fill_between(spec["wave"], oot_percentiles[2], oot_percentiles[4], color=color, alpha=0.5, zorder=-9,
+                        label=r'1$\sigma$')
+
+    if plot2sig:
+        ax.fill_between(spec["wave"], oot_percentiles[1], oot_percentiles[5], color=color, alpha=0.3, zorder=-10,
+                        label=r'2$\sigma$')
+
+    if plot3sig:
+        ax.fill_between(spec["wave"], oot_percentiles[0], oot_percentiles[6], color=color, alpha=0.2, zorder=-10,
+                        label=r'3$\sigma$')
+
+    if plotmedian:
+        ax.plot(spec["wave"], oot_percentiles[3], color=color, zorder=-8, label=r'Median')
+
+    if plotbestfit:
+        ax.plot(spec["wave"], oot_best, color=bestfit_color, zorder=-8, label=r'Max. likelihood')
+
+    ax.legend(loc=legend_loc)
+
+    if save_csv:
+        dct = dict()
+        dct["wave"] = deepcopy(np.array(spec["wave"]))
+        dct["bestfit"] = oot_best
+        dct["median"] = oot_percentiles[3]
+        dct["+1 sigma"] = oot_percentiles[4]
+        dct["-1 sigma"] = oot_percentiles[2]
+        dct["+2 sigma"] = oot_percentiles[5]
+        dct["-2 sigma"] = oot_percentiles[1]
+        dct["+3 sigma"] = oot_percentiles[6]
+        dct["-3 sigma"] = oot_percentiles[0]
+
+        t = table.Table(data=dct)
+        t.write(results_folder + "blobs_1_2_3_sigma" + runname + ".csv", overwrite=True)
+    return fig, ax
+
 def plot_exotune_samples_res(spec, param, fitparanames,
                              ind_bestfit, post_burnin_samples, T_grid, logg_grid,
                              modelgrid_wave,
@@ -1477,8 +1574,7 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.5,
 
     hist_kwargs["color"] = plotparams["hist_color"]
     color = plotparams["hist_color"]
-    pdb.set_trace()
-    fig = corner.corner(samples, labels=plotparams["labels"], 
+    fig = corner.corner(samples, labels=plotparams["labels"],
                         plot_datapoints=plot_datapoints, smooth=smooth,
                         show_titles=show_titles, quantiles=quantiles,
                         title_kwargs=title_kwargs, color=color,
@@ -1486,25 +1582,40 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.5,
                         levels=levels, **kwargs)
     return fig
 
-def plot_custom_corner(samples, fitparanames, parabestfit, param):
+def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
+                       hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,T_grid,logg_grid):
     """
-    Generate a customized corner plot with ordered parameters and prior-informed ranges.
+    Generate a customized corner plot with parameters ordered for clarity and axes ranges informed by priors.
 
     Parameters
     ----------
     samples : ndarray
-        MCMC samples array of shape (nsamples, nparameters) from post-burn-in chains.
+        Array of MCMC samples with shape (n_samples, n_parameters), post burn-in.
     fitparanames : list of str
-        Names of the parameters in the same order as in `samples`.
+        Names of the fitted parameters in the order they appear in `samples`.
     parabestfit : ndarray
-        Array of best-fit parameter values (e.g., from max likelihood).
+        Best-fit values for the parameters.
     param : dict
-        Dictionary of default parameter values, used to compute derived parameters and prior ranges.
+        Dictionary containing default parameter values, used for computing prior ranges.
+    gaussparanames : list of str
+        Names of parameters with Gaussian priors.
+    hyperp_gausspriors : list of lists
+        Hyperparameters defining the Gaussian priors for relevant parameters.
+    fitLogfSpotFac : list of bool
+        Flag indicating whether to fit the log of fspot/ffac parameters.
+    hyperp_logpriors : dict
+        Hyperparameters defining log-uniform priors for specific parameters.
+    T_grid : ndarray
+        Grid of stellar effective temperatures used to inform priors.
+    logg_grid : ndarray
+        Grid of stellar surface gravities used to inform priors.
+
     Returns
     -------
     fig : matplotlib.figure.Figure
-        The matplotlib figure object containing the customized corner plot.
+        The figure object containing the customized corner plot.
     """
+
 
 
     # reorder samples
@@ -1516,8 +1627,10 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param):
     ordered_fitparanames = []
     ind = np.where(np.array(fitparanames)=="logFscale")
     Fscale_guess =  10**parabestfit[ind[0][0]]
-    parampriors = get_param_priors(param,[],Fscale_guess=Fscale_guess)
-    
+    parampriors = get_param_priors(param, gaussparanames, hyperp_gausspriors=hyperp_gausspriors,
+    fitLogfSpotFac=fitLogfSpotFac, hyperp_logpriors=hyperp_logpriors,
+    T_grid=T_grid, logg_grid=logg_grid, Fscale_guess=Fscale_guess)
+
     ordered_rgs = [] # ranges for each parameter
     for p in ordered_fitparanames_all:
         if p in fitparanames:
@@ -1541,7 +1654,7 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param):
     # ind = np.where(get_labels_from_fitparanames(ordered_fitparanames)!="logErrInfl")[0]
 
     plotparams = dict()
-    plotparams["hist_color"] = "C0"
+    plotparams["hist_color"] = "coral"
     plotparams["labels"] = get_labels_from_fitparanames(ordered_fitparanames)
 
     print("\nSanity check:")
@@ -1600,7 +1713,8 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
     ax.scatter(spec.wave, flat_st_ctm_models[ind_maxprob], label="Max. Probability", color="slateblue", alpha=1.)
     ax.scatter(spec.wave, flat_st_ctm_models[ind_bestfit], label="Max. Likelihood", color="r", alpha=0.5, marker=".", s=50)
 
-    ax.text(np.min(spec.waveMin)-pad/4, 1.08*np.median(spec.yval), format_param_str(param_bestfit, fitparanames), fontsize=10, fontweight="bold", color="k")
+    ymin, ymax = ax.get_ylims()
+    ax.text(np.max(spec.waveMax)+pad-pad/4, 0.95*ymax, format_param_str(param_bestfit, fitparanames), fontsize=8, color="k",ha="right", va="top")
 
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
 
