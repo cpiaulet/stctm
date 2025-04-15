@@ -445,7 +445,7 @@ if 1:
     ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
 
     if save_fit:
-        fig.savefig(results_folder+"stctm_1_2_3_sigma_noprint"+runname+".pdf")
+        fig.savefig(results_folder+"stctm_1_2_3_sigma_"+runname+".pdf")
 
     if save_fit:
         fig.savefig(results_folder+"stctm_1_2_3_sigma_"+runname+".png")

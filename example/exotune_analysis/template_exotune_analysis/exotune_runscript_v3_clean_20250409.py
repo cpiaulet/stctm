@@ -33,24 +33,22 @@ import h5py
 import sys
 import astropy.io as aio
 import shutil
-
+from copy import deepcopy
 from multiprocessing import Pool
 import scipy.signal as sig
 from matplotlib.gridspec import GridSpec  
 
 
-##  --- User inputs --- #
 
+## User inputs: Spectrum and labels
 print("Reading in user inputs...")
-
-## User inputs: Spectrum (or time series of spectra)
 
 # label for the observation
 label_obs = "test_visit"
 
 start_from_timeseries = True # whether to start from a time series of spectra, or from a spectrum file
 save_median_spectrum = False # whether to save the median spectrum that was created from the time series
-path_save_median_spectrum = "/../observations/planetname/planet_outoftransit_spectrum.csv" # path to save the median spectrum to
+path_save_median_spectrum = "../../observations/planetname/planet_outoftransit_spectrum.csv" # path to save the median spectrum to
 
 if start_from_timeseries:
     if label_obs=="test_visit":
@@ -97,7 +95,7 @@ else:
     print("The star:", which_star, "does not have defined parameters!")
     pdb.set_trace()
 
-## User inputs: Stellar model grid
+## User inputs: stellar models grid
 
 label_grid = "PHOENIX_TRAPPIST_1"
 use_phoenix = True
@@ -110,7 +108,7 @@ if label_grid == "PHOENIX_TRAPPIST_1":
     resPower_target = 10000
     wv_min_um = 0.2
     wv_max_um = 5.4
-    stmodfile = "../R"+str(resPower_target)+"_model_grids/TRAPPIST_1_pymsg.h5"
+    stmodfile = "../../R"+str(resPower_target)+"_model_grids/TRAPPIST_1_pymsg.h5"
 
 else:
     print("The stellar model grid:", label_grid, "is not defined!")
@@ -147,10 +145,14 @@ gaussparanames = np.array([])
 hyperp_gausspriors = []
 
 # gaussparanames = np.array(["Tphot"])
-# hyperp_gausspriors = [[2566,70]]
+# hyperp_gausspriors = [[Teffstar,70]]
 
 fitLogfSpotFac = [0,1] #[spot,fac]
 hyperp_logpriors = [-5,0] #[]
+
+# Where to get the photosphere log g value from: user-specified value or pre-set loggstar
+logg_phot_source = "value" # options: "value", "loggstar"
+logg_phot_value = 2.5 # user-specified value
 
 res_suffix = "_test_for_GitHub"
 if parallel:
@@ -214,7 +216,7 @@ if start_from_timeseries:
     ax.set_title("Masked regions (TIME)")
 
 ##  Calculate median spectrum (or read in spectrum to fit) and save to spec object...
-print("\nCalculate or Read in median out-of-transit spectrum and use to initialize StellSpec object...")
+print("\nCalculate or Read in median out-of-transit spectrum and use to initialize pyStellSpec object...")
 
 if start_from_timeseries:
     print("/nCalculate median spectrum and use to initialize StellSpec object...")
@@ -309,7 +311,13 @@ print("\nFixed resolution model grid shape:", models_grid_fixedR.shape)
 ##  Visualize nominal model in grid on top of observations (scaled)
 
 # obtain all parameters from default settings
-param, fitparanames = xtu.init_default_and_fitted_param(Teffstar, feh, 2.5, fitLogfSpotFac=fitLogfSpotFac)
+# logg initial guess
+if logg_phot_source == "loggstar":
+    logg_phot = deepcopy(loggstar)
+elif logg_phot_source == "value":
+    logg_phot = deepcopy(logg_phot_value)
+
+param, fitparanames = xtu.init_default_and_fitted_param(Teffstar, feh, logg_phot, fitLogfSpotFac=fitLogfSpotFac)
 param = xtu.get_derived_param(param)
 
 print("\nGuessing Fscale value from the data...")
@@ -331,7 +339,18 @@ ax.legend(loc=1)# get nominal model from default parameters
 
 ##  Stop here if you just wanted to update your data selection
 if optimize_param:
+    this_dir = os.getcwd()+"/"
+    print("\nSaving previously-created figures...")
+    if start_from_timeseries:
+        fig1.savefig(this_dir + "exotune_select_time_"+res_suffix+'_preprocessOnly.png')
+    fig2.savefig(this_dir + "exotune_select_wave_"+res_suffix+'_preprocessOnly.png')
+    plt.close(fig1)
+    plt.close(fig2)
+    fig3.savefig(this_dir + "exotune_get_fscale_"+res_suffix+'_preprocessOnly.png')
+    plt.close(fig3)
+
     print("\nStopping here, parameters were optimized!")
+
     sys.exit()
 
 ##  Initialize for MCMC
@@ -352,47 +371,61 @@ if 1:
     for p in fitparanames:
         runname = runname + "_"+p
     runname = runname + res_suffix
-    results_folder = "../exotune_results/"+runname+"/"   
-    print("\nResults folder:", results_folder)
+    res_dir = "../../exotune_results/"+runname+"/"
+    print("\nResults folder:", res_dir)
     
     # Setup for post-processing
-    if not os.path.isdir(results_folder):
-       os.makedirs(results_folder)
-       
-    
+    if not os.path.isdir(res_dir):
+       os.makedirs(res_dir)
+
     # Save previously-created figures
     print("\nSaving previously-created figures...")
     if start_from_timeseries:
-        fig1.savefig(results_folder + "exotune_select_time_"+runname+'.png')
-    fig2.savefig(results_folder + "exotune_select_wave_"+runname+'.png')
+        fig1.savefig(res_dir + "exotune_select_time_"+runname+'.png')
+    fig2.savefig(res_dir + "exotune_select_wave_"+runname+'.png')
     plt.close(fig1)
     plt.close(fig2)
-    fig3.savefig(results_folder + "exotune_get_fscale_"+runname+'.png')
+    fig3.savefig(res_dir + "exotune_get_fscale_"+runname+'.png')
     plt.close(fig3)
 
     #** Get .py files used to run this case
     this_dir = os.getcwd()+"/"
     this_script = __file__.split(os.sep)[-1]
-    script_name = "exotune_runscript.py"
+    utils_script = str(xtu.__file__)
+
+    script_name = "exotune_runfile_thisrun.py"
+    utils_script_name = "exotune_utilities_thisrun.py"
+    
     print("\nSaving files...")
-    print("\nThis file:", this_dir+this_script)
-    print("Saved to file:", results_folder+script_name)
-    shutil.copy(this_dir+this_script, results_folder+script_name)
+    print("\n--Run-analysis file...")
+    print("\n**This file:", this_dir+this_script)
+    print("Saved to file:", res_dir+script_name)
+    shutil.copy(this_dir+this_script, res_dir+script_name)
+    print("... Done.**")
+
+    print("\n--Utilities file...")
+
+    print("\n**This file:", utils_script)
+    print("Saved to file:", res_dir+utils_script_name)
+
+    shutil.copy(utils_script, res_dir+utils_script_name)
+    print("... Done.**")
     
 ##  Plot fitted spectrum
 if 1:
-    print("Plotting fitted spectrum...")
+    print("\nPlotting fitted spectrum...")
 
     # plot spectrum
     fig, ax = spec.plot()    
-    fig.savefig(results_folder + "exotune_fitted_spectrum.pdf")
+    fig.savefig(res_dir + "exotune_fitted_spectrum.pdf")
     plt.close(fig)
 
 ##  define parameters for emcee run
 
 if 1:
-    print("Setting up MCMC...")
+    print("\nSetting up MCMC...")
     ndim, nwalkers = len(fitparanames), len(fitparanames) * 20
+    print("\nUsing N walkers = 20x N para...")
 
     defaultpara=np.zeros(len(fitparanames))
 
@@ -442,6 +475,11 @@ if ncpu>1:
     
     
     def lnlike_parallel(theta):
+        """
+        Log-likelihood function for parallel runs.
+        The only explicit parameter is theta (parameter array) but the others
+        are set as variables outside of the function.
+        """
         
         param =  param0
         fitparanames =  fitparanames0
@@ -506,16 +544,9 @@ if ncpu>1:
     
     def get_param_priors_parallel():
         """
-    
-        Parameters
-        ----------
-        param : dict
-            dictionary of default param values .
-    
-        Returns
-        -------
-        dictionary of parameter priors in the form of [low, high] for uniform priors.
-    
+        Get parameter priors for the MCMC run.
+        Returns a dictionary of parameter priors in the form of [low, high] for uniform priors.
+
         """
         T_grid =  T_grid0
         logg_grid =  logg_grid0
@@ -562,16 +593,14 @@ if ncpu>1:
                 else:
                     parampriors[par] = defaultpriors[par]
                     
-                    
-                    
-                    
+
+        # bounds for parameters with Gaussian priors
         for par in param:
             if par in gaussparanames:
                 ind_gaussparam = np.where(gaussparanames == par)[0][0]
                 mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
                 std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
                 new_prior = [np.max([mean_gaussparam - 5.*std_gaussparam, parampriors[par][0]]), np.min([mean_gaussparam + 5.*std_gaussparam, parampriors[par][1]])]
-                # pdb.set_trace()
                 parampriors[par] = new_prior
                 
         return parampriors
@@ -581,14 +610,18 @@ if ncpu>1:
     
     
     def lnprior_parallel(theta):
+        """
+        Log-prior function for parallel runs.
+        The only explicit parameter is theta (parameter array) but the others
+        are set as variables outside of the function.
+        """
     
         param =  param0
         fitparanames =  fitparanames0
         gaussparanames =  gaussparanames0
         hyperp_gausspriors = hyperp_gausspriors0
 
-    
-        
+
         lp = 0.
         
         for i, paraname in enumerate(fitparanames):
@@ -598,16 +631,11 @@ if ncpu>1:
         parampriors = get_param_priors_parallel()
 
         for i, paraname in enumerate(fitparanames):
-            # print("Prior on", paraname)
-            # print("lp:", lp)
-            # pdb.set_trace()
             if parampriors[paraname][0] < theta[i] <parampriors[paraname][1]:
-                # print("Parampriors for this para:", parampriors[paraname])
                 if paraname in gaussparanames:
                     ind_gaussparam = np.where(gaussparanames == paraname)[0][0]
                     mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
                     std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
-                    # ind_gaussparam = np.where(list(gaussparanames) == paraname)
                     lp = lp - 0.5*((theta[i]-mean_gaussparam)**2./(std_gaussparam**2.))
     
                 else:
@@ -621,6 +649,11 @@ if ncpu>1:
         return lp
     
     def lnprob_parallel(theta):
+        """
+        Log-probability function for parallel runs.
+        The only explicit parameter is theta (parameter array) but the others
+        are set as variables outside of the function.
+        """
         waveMin, waveMax, yval, yerrLow = spec0
         
         lp = lnprior_parallel(theta)
@@ -629,8 +662,6 @@ if ncpu>1:
             return -np.inf, np.zeros_like(np.array(yval)) * np.nan
             # return -np.inf
         else:
-            # pdb.set_trace()
-    
             lnlk, model = lnlike_parallel(theta)
     
             lnprb = lp + lnlk
@@ -638,7 +669,7 @@ if ncpu>1:
     
 ## 
 if 1:
-    print("Create sampler...")
+    print("\nCreating sampler...")
     
     if ncpu==1:
         print("Running serial version of the MCMC fit!")
@@ -655,7 +686,7 @@ if 1:
         
 ##  run emcee
 if 1:
-    print("Running MCMC...")
+    print("\nRunning MCMC...")
 
     sampler.run_mcmc(pos, nsteps, progress=True, store=True)
 
@@ -673,23 +704,23 @@ if 0:
 ##  ----- Post-processing ----
 if 1: # chainplot
 
-    print("Generating chain plot...")
+    print("\nGenerating chain plot...")
 
     fig, axes = xtu.chainplot(sampler.chain[:, burnin:, :], labels=fitparanames)
     if save_fit:
-        fig.savefig(results_folder + "exotune_chainplot_noburnin_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_chainplot_noburnin_"+runname+'.png')
         plt.close(fig)
 
     fig, axes = xtu.chainplot(sampler.chain[:, :, :], labels=fitparanames)
     if save_fit:
-        fig.savefig(results_folder + "exotune_chainplot_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_chainplot_"+runname+'.png')
         plt.close(fig)
 
 ## 
 if 1: #saving
-    print("Saving results to pandas DataFrame...")
+    print("\nSaving results to pandas DataFrame...")
 
-    rs = xtu.save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, 
+    rs = xtu.save_mcmc_to_pandas(res_dir, runname, sampler, burnin, ndim, 
                                  fitparanames, save_fit)
     bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res = rs
 
@@ -701,6 +732,8 @@ target_resP = 300 # plot stellar spectra at which resolution
 sample_spectra = None
 
 ##  plot 1,2,3 sigma from fixed resolution contamination spectra
+
+print("\nPlotting 1,2,3 sigma percentiles for the models superimposed with the data...")
 
 if sample_spectra is None:
     # spec.meta["color"] = "k"
@@ -714,19 +747,19 @@ if sample_spectra is None:
                               bestfit_color = 'k', color="coral",plot3sig=True,
                               plot2sig=True, plot1sig=True, plotmedian=True,
                               plotbestfit=True, legend_loc=4, save_csv=True, 
-                              results_folder=results_folder, runname=runname)
+                              results_folder=res_dir, runname=runname)
 
 
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
     # ax.set_ylim(0.8*np.median(spec.yval), 1.15*np.median(spec.yval))
     
     if save_fit:
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     xtu.xspeclog(ax,level=1)
     if save_fit:
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
         plt.close(fig)
 
 
@@ -745,16 +778,17 @@ else:
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
 
     if save_fit:
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     xtu.xspeclog(ax,level=1)
     if save_fit:
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
         plt.close(fig)
 
 ##  Save blobs + plot best fit
 if 1:
+    print("\nSaving blobs...")
     # Blobs
     blobs = sampler.get_blobs()
     if ncpu>1:
@@ -763,30 +797,51 @@ if 1:
         pool.join()
     flat_oot_spec_models = blobs.T[:, burnin:]["oot_spec_model"].reshape((-1))
     if save_fit:
-        np.save(results_folder+"oot_spec_model_blobs_"+runname+".npy", flat_oot_spec_models)
+        np.save(res_dir+"oot_spec_model_blobs_"+runname+".npy", flat_oot_spec_models)
 
-
+    print("\nPlotting best fit model with observations...")
     fig, ax = xtu.plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, 
                                            ind_bestfit, fitparanames, flat_oot_spec_models, pad=pad)
     
     if save_fit:
-        fig.savefig(results_folder+"exotune_bestfit_model_with_obs_"+runname+".png")
+        fig.savefig(res_dir+"exotune_bestfit_model_with_obs_"+runname+".png")
         plt.close(fig)
 
-    xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, 
-                           results_folder, runname, save_fit=save_fit)
+    print("\nComputing statistics (chi-squared, BIC) on the run results...")
+    xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models,
+                           res_dir, runname, save_fit=save_fit)
     
             
-    
+    print("\nSaving default parameters to file...")
     t_defaultparam = table.Table([param])
     if save_fit:
-        aio.ascii.write(t_defaultparam, results_folder+"exotune_defaultparams_"+runname+'.csv', format='csv', overwrite=True)
+        aio.ascii.write(t_defaultparam, res_dir+"exotune_defaultparams_"+runname+'.csv', format='csv', overwrite=True)
 
     oot_spec_models = np.array([flat_oot_spec_models[i] for i in range(flat_oot_spec_models.size)])
 
+## plot 1,2,3 sigma with blobs
+
+if 1:
+    fig, ax = xtu.plot_exotune_blobs(spec, oot_spec_models,
+                                   ind_bestfit,
+                                   bestfit_color='k', color="coral",
+                                   plot3sig=True, plot2sig=True, plot1sig=True, plotmedian=True,
+                                   plotbestfit=True, legend_loc=4, save_csv=True,
+                                   results_folder=res_dir, runname=runname)
+
+    ax.set_xlim(np.min(spec.waveMin) - pad / 2, np.max(spec.waveMax) + pad)
+    ax.set_ylim(0.8 * np.median(spec.yval), 1.15 * np.median(spec.yval))
+
+    if save_fit:
+        fig.savefig(res_dir + "exotune_1_2_3_sigma_" + runname + ".pdf")
+
+    if save_fit:
+        fig.savefig(res_dir + "exotune_1_2_3_sigma_" + runname + ".png")
+
+# sys.exit()
 ##  joint plot
 if 1:
-
+    print("\nCreating combo plot with spectra and parameter distributions...")
     nparaplot = len(fitparanames)
     if "logErrInfl" in fitparanames:
         nparaplot = nparaplot -1
@@ -795,7 +850,8 @@ if 1:
     fig = plt.figure(figsize=(10,8))
     gs = GridSpec(2, nparaplot,left=0.1, hspace=0.25,right=0.95,bottom=0.1,top=0.95,height_ratios=[5,1.5])
     axspec = fig.add_subplot(gs[0,:])
-    
+
+    # plot the spectrum
     xtu.plot_exotune_samples_res(spec, param, fitparanames,
                               ind_bestfit, samples, Teffs_grid, loggs_grid,
                               wv_template_thisR,
@@ -815,10 +871,13 @@ if 1:
     
     
     iplot = 0
+    # get parameter priors to use as bounds for the distributions
     if ncpu>1:
         parampriors = get_param_priors_parallel()
     else:
         parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
+
+    # bottom panels: distributions on the parameters
     for i in range(len(fitparanames)):
         if fitparanames[i]!="logErrInfl":
             if fitparanames[i]!="logFscale":
@@ -852,24 +911,26 @@ if 1:
     # ax.set_ylim(0.8*np.median(spec.yval), 1.15*np.median(spec.yval))
     
     if save_fit:
-        fig.savefig(results_folder + "exotune_combo_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_combo_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_combo_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_combo_resP"+str(target_resP)+"_1_2_3sigma_"+runname+'.pdf')
     xtu.xspeclog(axspec,level=1)
     if save_fit:
-        fig.savefig(results_folder + "exotune_combo_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
-        fig.savefig(results_folder + "exotune_combo_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
+        fig.savefig(res_dir + "exotune_combo_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.png')
+        fig.savefig(res_dir + "exotune_combo_resP"+str(target_resP)+"_logwave_1_2_3sigma_"+runname+'.pdf')
         plt.close(fig)
 
 ##  Corner plot
 # try: #corner plot
+print("\nCreating corner plot...")
+fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit, param,
+                   gaussparanames,hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,Teffs_grid,loggs_grid)
 
-fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit,param)
 
 suffix = "_custom"
 if save_fit:
-    fig.savefig(results_folder+"exotune_corner_bestfit_"+runname+suffix+".pdf")
+    fig.savefig(res_dir+"exotune_corner_bestfit_"+runname+suffix+".pdf")
     plt.close(fig)
-
+print("\nPost-processing done!")
 # except:
     # print("Corner plot failed -- probably dynamic range issue")
 
