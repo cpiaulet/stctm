@@ -1291,28 +1291,28 @@ def plot_exotune_blobs(spec, oot_models_blobs,
         spec.plot(ax=ax)
 
     if plot1sig:
-        ax.fill_between(spec["wave"], oot_percentiles[2], oot_percentiles[4], color=color, alpha=0.5, zorder=-9,
+        ax.fill_between(spec.wave, oot_percentiles[2], oot_percentiles[4], color=color, alpha=0.5, zorder=-9,
                         label=r'1$\sigma$')
 
     if plot2sig:
-        ax.fill_between(spec["wave"], oot_percentiles[1], oot_percentiles[5], color=color, alpha=0.3, zorder=-10,
+        ax.fill_between(spec.wave, oot_percentiles[1], oot_percentiles[5], color=color, alpha=0.3, zorder=-10,
                         label=r'2$\sigma$')
 
     if plot3sig:
-        ax.fill_between(spec["wave"], oot_percentiles[0], oot_percentiles[6], color=color, alpha=0.2, zorder=-10,
+        ax.fill_between(spec.wave, oot_percentiles[0], oot_percentiles[6], color=color, alpha=0.2, zorder=-10,
                         label=r'3$\sigma$')
 
     if plotmedian:
-        ax.plot(spec["wave"], oot_percentiles[3], color=color, zorder=-8, label=r'Median')
+        ax.plot(spec.wave, oot_percentiles[3], color=color, zorder=-8, label=r'Median')
 
     if plotbestfit:
-        ax.plot(spec["wave"], oot_best, color=bestfit_color, zorder=-8, label=r'Max. likelihood')
+        ax.plot(spec.wave, oot_best, color=bestfit_color, zorder=-8, label=r'Max. likelihood')
 
     ax.legend(loc=legend_loc)
 
     if save_csv:
         dct = dict()
-        dct["wave"] = deepcopy(np.array(spec["wave"]))
+        dct["wave"] = deepcopy(np.array(spec.wave))
         dct["bestfit"] = oot_best
         dct["median"] = oot_percentiles[3]
         dct["+1 sigma"] = oot_percentiles[4]
@@ -1713,7 +1713,7 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
     ax.scatter(spec.wave, flat_st_ctm_models[ind_maxprob], label="Max. Probability", color="slateblue", alpha=1.)
     ax.scatter(spec.wave, flat_st_ctm_models[ind_bestfit], label="Max. Likelihood", color="r", alpha=0.5, marker=".", s=50)
 
-    ymin, ymax = ax.get_ylims()
+    ymin, ymax = ax.get_ylim()
     ax.text(np.max(spec.waveMax)+pad-pad/4, 0.95*ymax, format_param_str(param_bestfit, fitparanames), fontsize=8, color="k",ha="right", va="top")
 
     ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)

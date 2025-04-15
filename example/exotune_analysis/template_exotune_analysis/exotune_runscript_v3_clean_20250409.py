@@ -827,16 +827,16 @@ if 1:
                                    bestfit_color='k', color="coral",
                                    plot3sig=True, plot2sig=True, plot1sig=True, plotmedian=True,
                                    plotbestfit=True, legend_loc=4, save_csv=True,
-                                   results_folder=results_folder, runname=runname)
+                                   results_folder=res_dir, runname=runname)
 
-    ax.set_xlim(np.min(spec["waveMin"]) - pad / 2, np.max(spec["waveMax"]) + pad)
-    ax.set_ylim(0.8 * np.median(spec['yval']), 1.15 * np.median(spec['yval']))
-
-    if save_fit:
-        fig.savefig(results_folder + "exotune_1_2_3_sigma_" + runname + ".pdf")
+    ax.set_xlim(np.min(spec.waveMin) - pad / 2, np.max(spec.waveMax) + pad)
+    ax.set_ylim(0.8 * np.median(spec.yval), 1.15 * np.median(spec.yval))
 
     if save_fit:
-        fig.savefig(results_folder + "exotune_1_2_3_sigma_" + runname + ".png")
+        fig.savefig(res_dir + "exotune_1_2_3_sigma_" + runname + ".pdf")
+
+    if save_fit:
+        fig.savefig(res_dir + "exotune_1_2_3_sigma_" + runname + ".png")
 
 # sys.exit()
 ##  joint plot
