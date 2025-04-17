@@ -26,16 +26,7 @@ You can install *stctm* from GitHub:
     pip install -e .
     
 ### Dependencies
-The dependencies of *stctm* are 
-* *NumPy*
-* *scipy*
-* *emcee*
-* *corner*
-* *astropy*
-* *h5py*
-* *matplotlib*
-* *pandas*
-* *tqdm*
+The dependencies of *stctm* are *NumPy*, *scipy*, *emcee*, *corner*, *astropy*, *h5py*, *matplotlib*, *pandas*, *tqdm* (for progress bar with MCMC retrievals).
 
 #### Stellar models
 
@@ -75,7 +66,6 @@ I also compute the grid at a resolving power of 10,000 (```resPower_target```), 
 To calculate a grid of models, navigate to the folder where the run script resides, and simply run:
     python create_fixedR_grid_pymsg_template.py
 
-
 ## Stellar contamination retrieval vs. stellar spectrum retrievals
 
 Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
@@ -87,91 +77,100 @@ With ```stctm```, you can either fit **transmission spectra** to obtain constrai
 
 ## Stellar contamination (TLSE) retrievals with *stctm*
 
-You can fit any transmission spectrum (loaded into the code as a ```pyTransSpec``` object) assuming any variations from a straight line are due to the transit light source effect. In its current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
+You can fit any transmission spectrum (loaded into the code as a ```TransSpec``` object) assuming any variations from a straight line are due to the transit light source effect. In its current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
 
-### Setting up a retrieval
+### Setting up a retrieval: Run instructions
 
-In the way it is currently released, ```stctm``` requires you to enter the planet and star information directly in the run script. I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
+All the inputs you need to provide are specified in a ```.ini``` file, in a way similar to what I implemented for *smint* (github.com.cpiaulet/smint). 
 
-#### File and environment paths
-The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```stellar_retrieval_v13_generic_runfile.py```), resides. However, relative paths matter as the results folder will reside in ```../../stellar_contamination_results/``` (run-specific results folder automatically created by the code). 
+You should follow the following folder structure, starting with a copy of the ```stctm/example/``` directory anywhere in your installation you may want to run the code.
+* ```stellar_contamination_analysis/any_analysis_folder_name/```: my advice is to create a new analysis folder name under the ```stellar_contamination_analysis``` folder for each project you work on. In the example, that folder is called ```template_analysis/```.
+* In that folder, you'll need an analysis script (unless you need to customize things, you should just use a copy of ```stellar_retrieval_v14_generic_runfile.py```, and a ```.ini``` file, where you specify all the inputs following the instructions in the comments (see more information below).
+* At the same level as ```stellar_contamination_analysis/```, create a folder called ```stellar_contamination_results/```. For each of your runs, a subfolder will be added under this results directory and the run results will be saved there.
 
-Make sure that your environment paths are set up properly.
-Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
+Here is an example one-liner to run a *stctm* retrieval from a planet spectrum, after navigating to ```stellar_contamination_analysis/template_analysis```:
+
+    python stellar_retrieval_v14_generic_runfile.py template_ini_stctm.ini
+
+A few additional tips:
+* The "ini file" (.ini) contains all the user input necessary to run the code, including stellar and mcmc parameters, saving paths and plotting options
+* The path to an "ini file" needs to be provided to the python (.py) script (if different from the default) *or* provided as an argument if the script is run from the command line
+* Any parameter in the ini file can be modified from the default using the command line (instead of modifying the file). For instance, if you want to run the same fit as above, but only modify the suffix used for creating the output directory, you can do it as follows:
+```
+    python stellar_retrieval_v14_generic_runfile.py template_ini_stctm.ini -res_suffix=second_test
+```
+
+* Make sure that your environment paths are set up properly. Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
 You can do this via the command-line (see example below for ```CRDS_PATH```):
-
+```
     export CRDS_PATH=/home/caroline/crds_cache
-   
+```  
 or in the code of the analysis file itself:
-
+```
     import os
     os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+```
 
+### Setting up a retrieval: Modifying the ini file
 
 #### Setting up labels and path to spectrum file
-Under ```User inputs: Spectrum and labels``` you can set up:
-* ```label``` (used for plotting)
+Under ```[paths and labels]`` you can set up:
 * ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```TransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
 * ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
+* ```stmodfile```: the path to your stellar models grid file, in the HDF5 format
+* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
 
 #### Setting up the stellar parameters
 
-Under ```User inputs: Stellar parameters```, enter the parameters of the star to set the defaults for the fit. Make sure that you have an option ("if" statement) matching the ```which_star``` setting you entered above.
-
-#### Choosing the setup of your retrieval
-
-Under ```User inputs: MCMC fitting params``` you can choose:
-* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
-* ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
-* ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
-* ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
-* ```fitThet```: ```True``` if you want to fit for the temperature of unocculted spots and/or faculae, ```False``` otherwise.
-* ```fitTphot```: ```True``` if you want to fit for the temperature of the photosphere, ```False``` otherwise.
-* ```fitDscale```: ```True``` if you want to fit for the bare-rock transit depth (recommended), ```False``` otherwise.
-* ```fitlogg_phot```: ```True``` if you want to fit the photosphere log g, ```False``` otherwise.
-* ```fitlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
-* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
-
-#### Priors and default values
-
-You can set a Gaussian prior on any of your fitted parameters, using the ```gaussparanames``` and ```hyperp_gausspriors``` variables.
-
-By default (uniform priors on all fitted parameters):
-```
-gaussparanames = np.array([])
-hyperp_gausspriors = []
-```
-Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ```gaussparanames```, and add an element to the list ```hyperp_gausspriors``` that consists of a 2-element list of ```[mean_gaussian_prior, std_gaussian_prior]```. Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE):
-```
-gaussparanames = np.array(["Tphot"])
-hyperp_gausspriors = [[Teffstar,70]] # mean and std of the Gaussian prior on Tphot
-```
-where here I used ```Teffstar``` instead of a value for the stellar effective temperature, as it was defined in the Stellar Parameters section above.
-
-The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ```fitLogfSpotFac``` parameter. 
-* Use ```fitLogfSpotFac = [0,0]``` for the default settings of both parameters fitted with linear-uniform priors
-* Set the first/second element to 1 instead to use a log-uniform priors on ```fspot```(```ffac```).
-* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = [lower_bound, upper_bound]```.
-
-If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```stellar_retrieval_utilities.py```.
+Under ```[stellar params]```, enter the parameters of the star to set the defaults for the fit. 
 
 Default values for the stellar and heterogeneity log g:
 
 * ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
 * ```logg_het_default_source```: ```value``` to use the value of ```logg_het_value``` as the heterogeneities (default, if fitted) log g, otherwise ```logg_phot``` to set it to the same value as the stellar photosphere log g.
 
-
 #### Reading in the grid of stellar models
 
-Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
+Under ```[stellar models]```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
 
-### Running a TLS retrieval
+#### Choosing the setup of your retrieval
 
-Once you have set up all the parameters in the run file, navigate to your ```stellar_contamination_analysis/``` directory and simply run
+Under ```[MCMC params]``` you can choose:
+* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
+* ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
+* ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
+* ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
+* ```fitThet```: ```True``` if you want to fit for the temperature of unocculted spots and/or faculae, ```False``` otherwise.
+* ```fitTphot```: ```True``` if you want to fit for the temperature of the photosphere, ```False``` otherwise.
+* ```fitlogg_phot```: ```True``` if you want to fit the photosphere log g, ```False``` otherwise.
+* ```fitlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
+* ```fitDscale```: ```True``` if you want to fit for the bare-rock transit depth (recommended), ```False``` otherwise.
 
-    python stellar_retrieval_v13_generic_runfile.py
+#### Priors
 
-(replacing with the name of your run script).
+Under ```[priors]```, you can set a Gaussian prior on any of your fitted parameters, using the ```gaussparanames``` and ```hyperp_gausspriors``` variables.
+
+By default (uniform priors on all fitted parameters):
+```
+gaussparanames =
+hyperp_gausspriors =
+```
+Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ```gaussparanames```, and add a component to ```hyperp_gausspriors``` that specifies the mean and standard deviation of the gaussian parameter to adopt (looks like ```mean_std```). Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE):
+```
+gaussparanames = Tphot
+hyperp_gausspriors = 2566_70
+```
+
+The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ```fitLogfSpotFac``` parameter. 
+* Use ```fitLogfSpotFac = 0_0``` for the default settings of both parameters fitted with linear-uniform priors
+* Set the first/second element to 1 instead to use a log-uniform priors on ```fspot```(```ffac```).
+* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = lowerBound_upperBound```.
+
+If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```stellar_retrieval_utilities.py```.
+
+#### Plotting
+
+I am providing some flexibility on how your output plots will look under ```[plotting]```, with the ```pad``` parameter (roughly, the padding in microns added to the left and right of the spectrum plots compared to the extent of the observed spectrum), and ```target_resP``` which specifies the resolving power at which you wish your stellar contamination spectra to be plotted.
 
 ### Post-processing
 
