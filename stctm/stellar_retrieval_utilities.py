@@ -1121,7 +1121,7 @@ def parse_range_string(s, as_type=float):
     return [as_type(x) for x in s.split('_')]
 
 
-def get_stellar_model_grid(input_para):
+def get_stellar_model_grid(input_para,preprocessed=False):
     """
 
     Load a stellar model grid based on user-defined input parameters.
@@ -1131,7 +1131,8 @@ def get_stellar_model_grid(input_para):
     ----------
     input_para : dict
         dictionary of input parameters
-
+    preprocessed: bool
+        whether or not the parameter ranges already have the right format
     Returns
     -------
     tuple
@@ -1140,16 +1141,20 @@ def get_stellar_model_grid(input_para):
         - wv_template_edges_thisR: ndarray, wavelength bin edges
         - models_grid_fixedR: ndarray, model grid values
     """
-    logg_range = parse_range_string(input_para["logg_range"])
+    if preprocessed==False:
+        logg_range = parse_range_string(input_para["logg_range"])
 
-    if input_para["Teff_range"] == "default":
-        Teff_range = [np.min([2300. - input_para["Teffstar"], -100.]) + input_para["Teffstar"],
-                      input_para["Teffstar"] + 1000.]
+        if input_para["Teff_range"] == "default":
+            Teff_range = [np.min([2300. - input_para["Teffstar"], -100.]) + input_para["Teffstar"],
+                          input_para["Teffstar"] + 1000.]
+        else:
+            Teff_range = parse_range_string(input_para["Teff_range"])
+
+        wave_range = parse_range_string(input_para["wave_range"])
     else:
-        Teff_range = parse_range_string(input_para["Teff_range"])
-
-    wave_range = parse_range_string(input_para["wave_range"])
-
+        logg_range = input_para["logg_range"]
+        wave_range = input_para["wave_range"]
+        Teff_range = input_para["Teff_range"]
     print("Grid parameter ranges:")
     print("logg:", logg_range)
     print("Teff:", Teff_range)

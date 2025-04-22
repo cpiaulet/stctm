@@ -21,16 +21,396 @@ import emcee
 import astropy.table as table
 from copy import deepcopy
 import astropy.io as aio
+import stctm.pystellspec as psspec
+
+import h5py
+import scipy.signal as sig
 
 import pandas as pd
 import matplotlib.ticker as ticker
 
 from astropy.convolution import convolve,  Gaussian1DKernel
 import corner
+import multiprocessing as mp
+import shutil
 
+import configparser
+import argparse
 
+## Parsing
+
+def parse_range_string(s, as_type=float):
+    """
+    Convert a string representing two numeric values into a list.
+
+    Parameters
+    ----------
+    s : str
+        A string with two numeric values separated by an underscore (e.g., "1.4_5.4").
+    as_type : type, optional
+        The type to cast the values to, either `float` (default) or `int`.
+
+    Returns
+    -------
+    list
+        A list containing the two values, cast to the specified type.
+
+    """
+    return [as_type(x) for x in s.split('_')]
+
+def parse_gaussian_inputs(input_para):
+    """
+    Parse Gaussian parameter names and corresponding hyperparameter priors.
+
+    Parameters
+    ----------
+    input_para : dict
+        dictionary of input parameters
+
+    Returns
+    -------
+    tuple
+        - gaussparanames : np.ndarray
+            Array of parameter names.
+        - hyperp_gausspriors : list of lists
+            List of [mean, std] values for each parameter.
+    """
+
+    # Handle parameter names
+    if input_para["gaussparanames"] == "":
+        gaussparanames = np.array([])
+    else:
+        gaussparanames = np.array(input_para["gaussparanames"].split('_'))
+
+    # Handle hyperparameter priors
+    if input_para["hyperp_gausspriors"] == "":
+        hyperp_gausspriors = []
+    else:
+        hyperp_gausspriors = [parse_range_string(pair) for pair in input_para["hyperp_gausspriors"].split('|')]
+
+    if len(hyperp_gausspriors) != len(gaussparanames):
+        raise ValueError(f"Number of hyperparameter ranges ({len(hyperp_gausspriors)}) does not match "
+                         f"number of Gaussian parameters ({len(gaussparanames)}).")
+
+    if len(gaussparanames):
+        print("** Using Gaussian prior on ", list(gaussparanames))
+
+    return gaussparanames, hyperp_gausspriors
+
+def parse_all_input_exotune_iniFile(iniFile):
+    """
+    Parse an INI configuration file and command-line style arguments into a parameter dictionary.
+
+    Parameters
+    ----------
+    iniFile : str
+        Path to the INI configuration file
+
+    Returns
+    -------
+    params : dict
+        A dictionary where keys are parameter names and values are parsed from the INI file.
+        This dictionary can be used directly in downstream modeling and fitting code (after a bit of further parsing).
+    """
+
+    config = configparser.ConfigParser()
+    config.read(iniFile)
+
+    print('\nReading in the inputs...')
+
+    parser = argparse.ArgumentParser(description='Inputs for stellar contamination retrieval.')
+
+    def safe_get(section, key, val_type=str):
+        """
+        Safely retrieve and cast a value from a ConfigParser object.
+
+        This function attempts to fetch a value from a given section and key in an
+        INI configuration file and cast it to the desired type. If the key is missing,
+        it returns None. If casting fails, it falls back to returning the raw string.
+
+        Parameters
+        ----------
+        section : str
+            The section in the INI file to look for the key.
+        key : str
+            The specific key to retrieve within the section.
+        val_type : type, optional
+            The desired type to cast the value to. Supported types are: str, int, float,
+            bool.
+
+        Returns
+        -------
+        value : Any or None
+            The value from the INI file, cast to the specified type if possible.
+            Returns None if the key is not found.
+        """
+
+        if not config.has_option(section, key):
+            return None
+        value = config.get(section, key)
+        try:
+            if val_type == bool:
+                return config.getboolean(section, key)
+            elif val_type == int:
+                return config.getint(section, key)
+            elif val_type == float:
+                return config.getfloat(section, key)
+            else:
+                return value
+        except ValueError:
+            return value
+
+    # [choice of inputs]
+    parser.add_argument('-label_obs', default=safe_get('choice of inputs', 'label_obs'),
+                        help='Label for the current set of observations')
+    parser.add_argument('-start_from_timeseries', type=bool,
+                        default=safe_get('choice of inputs', 'start_from_timeseries', bool),
+                        help='Whether to start from a time series of spectra (True) or from a single spectrum file (False)')
+    parser.add_argument('-save_median_spectrum', type=bool,
+                        default=safe_get('choice of inputs', 'save_median_spectrum', bool),
+                        help='Whether to save to file the median spectrum created from the time series')
+    parser.add_argument('-path_save_median_spectrum',
+                        default=safe_get('choice of inputs', 'path_save_median_spectrum'),
+                        help='Path to save the median spectrum to')
+    parser.add_argument('-path_to_stellar_spec_ts',
+                        default=safe_get('choice of inputs', 'path_to_stellar_spec_ts'),
+                        help='Path to stellar spectrum time series (e.g., Eureka! output)')
+    parser.add_argument('-path_to_spec', default=safe_get('choice of inputs', 'path_to_spec'),
+                        help='Path to spectrum file (used if not starting from a time series)')
+    parser.add_argument('-spec_format', default=safe_get('choice of inputs', 'spec_format'),
+                        help='Spectrum format (options implemented: "MR_csv", "basic")')
+    parser.add_argument('-stmodfile', default=safe_get('choice of inputs', 'stmodfile'),
+                        help='Stellar models grid file path')
+
+    # [preprocessing]
+    parser.add_argument('-optimize_param', type=bool, default=safe_get('preprocessing', 'optimize_param', bool),
+                        help='Whether to stop after initial processing instead of running MCMC')
+    parser.add_argument('-obsmaskpattern', default=safe_get('preprocessing', 'obsmaskpattern'),
+                        help='Label for time/wavelength mask pattern (e.g., "avoidflares")')
+    parser.add_argument('-kern_size', default=safe_get('preprocessing', 'kern_size'),
+                        help='Kernel size for median-filtered light curve (for plotting)')
+    parser.add_argument('-jd_range_mask', default=safe_get('preprocessing', 'jd_range_mask'),
+                        help='JD ranges to mask when building spectrum (format: start1_end1|start2_end2...)')
+    parser.add_argument('-wave_range_mask', default=safe_get('preprocessing', 'wave_range_mask'),
+                        help='Wavelength ranges to mask (same format as jd_range_mask)')
+
+    # [saving options]
+    parser.add_argument('-save_fit', type=bool, default=safe_get('saving options', 'save_fit', bool),
+                        help='Whether to save the fit results')
+    parser.add_argument('-res_suffix', default=safe_get('saving options', 'res_suffix'),
+                        help='Suffix for all output result files')
+
+    # [stellar params]
+    parser.add_argument('-Teffstar', type=float, default=safe_get('stellar params', 'Teffstar', float),
+                        help='Effective temperature of the star in Kelvin')
+    parser.add_argument('-feh', type=float, default=safe_get('stellar params', 'feh', float),
+                        help='Metallicity [Fe/H] of the star')
+    parser.add_argument('-loggstar', type=float, default=safe_get('stellar params', 'loggstar', float),
+                        help='Log surface gravity (log g) of the star in cgs units')
+    parser.add_argument('-logg_phot_source', default=safe_get('stellar params', 'logg_phot_source'),
+                        help='Source for default photospheric log g ("value" or "loggstar")')
+    parser.add_argument('-logg_phot_value', type=float,
+                        default=safe_get('stellar params', 'logg_phot_value', float),
+                        help='Value of default photospheric log g if "value" is used')
+
+    # [stellar models]
+    parser.add_argument('-label_grid', default=safe_get('stellar models', 'label_grid'),
+                        help='Label for the stellar model grid')
+    parser.add_argument('-logg_range', default=safe_get('stellar models', 'logg_range'),
+                        help='Range of log g values for the grid (format: min_max)')
+    parser.add_argument('-loggstep', type=float, default=safe_get('stellar models', 'loggstep', float),
+                        help='Step size for log g grid in cgs')
+    parser.add_argument('-Teff_range', default=safe_get('stellar models', 'Teff_range'),
+                        help='Effective temperature range ("default" or min_max)')
+    parser.add_argument('-Teffstep', type=float, default=safe_get('stellar models', 'Teffstep', float),
+                        help='Step size for Teff grid in Kelvin')
+    parser.add_argument('-resPower_target', type=int,
+                        default=safe_get('stellar models', 'resPower_target', int),
+                        help='Resolving power at which the model grid was computed')
+    parser.add_argument('-wave_range', default=safe_get('stellar models', 'wave_range'),
+                        help='Wavelength range for model grid (format: minwave_maxwave)')
+
+    # [MCMC params]
+    parser.add_argument('-parallel', type=bool, default=safe_get('MCMC params', 'parallel', bool),
+                        help='Run MCMC in parallel using multiple CPUs')
+    parser.add_argument('-ncpu', type=int, default=safe_get('MCMC params', 'ncpu', int),
+                        help='Number of CPUs to use for MCMC')
+    parser.add_argument('-nsteps', type=int, default=safe_get('MCMC params', 'nsteps', int),
+                        help='Number of MCMC steps')
+    parser.add_argument('-frac_burnin', type=float, default=safe_get('MCMC params', 'frac_burnin', float),
+                        help='Fraction of chains to discard as burn-in')
+
+    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fitFscale',
+                  'fiterrInfl']:
+        parser.add_argument(f'-{param}', type=bool, default=safe_get('MCMC params', param, bool),
+                            help=f'Whether to fit {param}')
+
+    # [priors]
+    parser.add_argument('-gaussparanames', default=safe_get('priors', 'gaussparanames'),
+                        help='List of parameters with Gaussian priors (e.g., Tphot_ffac)')
+    parser.add_argument('-hyperp_gausspriors', default=safe_get('priors', 'hyperp_gausspriors'),
+                        help='Means and stds for Gaussian priors (e.g., mean1_std1|mean2_std2)')
+    parser.add_argument('-fitLogfSpotFac', default=safe_get('priors', 'fitLogfSpotFac'),
+                        help='Flags for log/linear prior on fspot/ffac: 0 for lin, 1 for log (e.g., 0_0)')
+    parser.add_argument('-hyperp_logpriors', default=safe_get('priors', 'hyperp_logpriors'),
+                        help='Prior bounds on heterogeneity fractions if using log prior (e.g., -5_0)')
+
+    # [plotting]
+    parser.add_argument('-pad', type=float, default=safe_get('plotting', 'pad', float),
+                        help='Padding in microns for plotting spectrum')
+    parser.add_argument('-target_resP', type=int, default=safe_get('plotting', 'target_resP', int),
+                        help='Target resolving power used to smooth models for plotting')
+
+    # Parse and return
+    args, unknown = parser.parse_known_args()
+
+    params = deepcopy(args.__dict__)
+
+    # -- Do further parsing for params that aren't as easy to read in from the ini file
+
+    # Preprocessing
+    for para_to_parse in ["jd_range_mask", "wave_range_mask"]:
+        if params[para_to_parse] == "":
+            params[para_to_parse] = []
+        else:
+            params[para_to_parse] = [parse_range_string(pair) for pair in params[para_to_parse].split('|')]
+
+    # Stellar models grid
+    params["logg_range"] = parse_range_string(params["logg_range"])
+
+    if params["Teff_range"] == "default":
+        params["Teff_range"] = [np.min([2300. - params["Teffstar"], -100.]) + params["Teffstar"],
+                                params["Teffstar"] + 1000.]
+    else:
+        params["Teff_range"] = parse_range_string(params["Teff_range"])
+
+    params["wave_range"] = parse_range_string(params["wave_range"])
+
+    # Setup of priors
+    res = parse_gaussian_inputs(params)
+    params["gaussparanames"] = res[0]
+    params["hyperp_gausspriors"] = res[1]
+
+    params["fitLogfSpotFac"] = parse_range_string(params["fitLogfSpotFac"], as_type=int)
+    params["hyperp_logpriors"] = parse_range_string(params["hyperp_logpriors"])
+
+    # create the label for the run
+    label_run = ""
+    label_run = label_run + "Obs_"+params["label_obs"] + "_Mod_" + params["label_grid"]
+    if params["start_from_timeseries"]:
+        label_run = label_run + "_Mask" + params["obsmaskpattern"]
+    if len(params["kern_size"])==0:
+        params["kern_size"] = None
+    else:
+        params["kern_size"] = int(params["kern_size"])
+
+    if params["parallel"] is False:
+        params["ncpu"] = 1 # overwrite
+    print("\nDone with parsing!")
+
+    return params, label_run
 
 ## Pre-processing
+
+def read_in_2d_spec(path):
+    """
+    Read a 2D time-series spectrum from an HDF5 file.
+
+    This function reads an HDF5 file containing time-series spectral data
+    (e.g., from a pipeline like Eureka!), extracts the 1D wavelength and time
+    arrays, and reshapes the optimal extraction spectrum into a 2D array
+    of shape (time, wavelength).
+
+    Parameters
+    ----------
+    path : str
+        Path to the HDF5 file containing spectral time series data.
+
+    Returns
+    -------
+    timeUnique : ndarray
+        1D array of unique time values.
+
+    waveUnique : ndarray
+        1D array of unique wavelength values.
+
+    optspec2D : ndarray
+        2D array of optimally extracted spectra with shape (n_times, n_wavelengths).
+    """
+
+    print("\nReading in time-series of spectra: ", path)
+
+    s3output = h5py.File(path, 'r')
+    waveUnique = np.unique(np.array(s3output["wave_1d"]))
+    timeUnique = np.unique(np.array(s3output["time"]))
+
+    print("\nReading in optimal extraction results...")
+    optspec = np.array(s3output["optspec"])
+    optspec2D = optspec.reshape(timeUnique.size, waveUnique.size)
+    print("\nShape (time, wave) of spectra time series:", optspec2D.shape)
+    return timeUnique, waveUnique, optspec2D
+
+
+def calc_and_plot_timeMasked_mednorm_lc(timeUnique, optspec2D, params):
+    """
+    Calculate and plot a median-normalized light curve from a time-series spectrum,
+    optionally applying smoothing and masking specified time ranges.
+
+    Parameters
+    ----------
+    timeUnique : ndarray
+        1D array of time values (e.g., BJD) for the spectral time series.
+
+    optspec2D : ndarray
+        2D array of spectral data with shape (n_times, n_wavelengths).
+
+    params : dict
+        Dictionary of parameters including:
+            - "kern_size": (int or None) Kernel size for median filtering.
+            - "mask_range": (tuple or list) One or more (start, end) time ranges to mask.
+            - "jd_range_mask": list of lists or strings defining time intervals to be masked.
+
+    Returns
+    -------
+    fig1 : matplotlib.figure.Figure
+        The matplotlib figure containing the light curve plot.
+
+    timeUnique : ndarray
+        The time array after applying any specified masks.
+
+    optspec2D : ndarray
+        The 2D spectral array after masking the specified time intervals.
+    """
+    # create median-normalized light curve
+    lc_mednorm = np.nansum(optspec2D / np.nanmedian(optspec2D, axis=0)[None, :], axis=1)
+    lc_mednorm = lc_mednorm / np.nanmedian(lc_mednorm)
+
+    if params["kern_size"] is not None:
+        lc_medfilt = sig.medfilt(lc_mednorm, kernel_size=params["kern_size"])
+        t_medfilt = sig.medfilt(timeUnique, kernel_size=params["kern_size"])
+
+    fig1, ax = plt.subplots(1, 1)
+    if params["kern_size"] is not None:
+        bjd0 = int(t_medfilt[0])
+        ax.plot(t_medfilt - bjd0, lc_medfilt, color="k")
+    else:
+        bjd0 = int(timeUnique[0])
+        ax.plot(timeUnique - bjd0, lc_mednorm, color="k")
+
+    if len(params["jd_range_mask"][0]):
+        for i, mask_range in enumerate(params["jd_range_mask"]):
+            ind = np.where((timeUnique < mask_range[0]) + (timeUnique > mask_range[1]))
+            ax.axvspan(mask_range[0] - bjd0, mask_range[1] - bjd0, zorder=-1000, color="gray",
+                       alpha=0.5, label=mask_range)
+            timeUnique = timeUnique[ind]
+            optspec2D = np.squeeze(optspec2D[ind, :])
+            print("Masking time range ", mask_range, "new shape (time, wave):", optspec2D.shape)
+
+    ax.legend()
+    ax.set_xlabel("Time [BJD-" + str(bjd0) + "]")
+    ax.set_ylabel("Flux (median-filt.)")
+    ax.set_title("Masked regions (TIME)")
+    return fig1, timeUnique, optspec2D
 
 def get_median_spectrum_and_unc(wave_um, spec_ts, flux_calibrated=False):
     """
@@ -72,6 +452,52 @@ def get_median_spectrum_and_unc(wave_um, spec_ts, flux_calibrated=False):
     return median_spectrum, err_median_spectrum
 
 
+def get_StellSpec_from_spec_timeseries(waveUnique, optspec2D, params, flux_calibrated=True):
+    """
+    Compute the median spectrum from a spectral time series and initialize a StellSpec object.
+
+    Parameters
+    ----------
+    waveUnique : ndarray
+        1D array of unique wavelength values corresponding to the spectrum.
+
+    optspec2D : ndarray
+        2D array of optimal extraction spectral data with shape (n_times, n_wavelengths).
+
+    params : dict
+        Dictionary of parameters including:
+            - "save_median_spectrum": (bool) Whether to save the median spectrum to file.
+            - "path_save_median_spectrum": (str) Path to save the median spectrum file.
+
+    flux_calibrated : bool, optional
+        If True, assumes the spectral flux is already flux-calibrated. Default is True.
+
+    Returns
+    -------
+    spec : psspec.StellSpec
+        A `StellSpec` object containing the median spectrum.
+
+    Notes
+    -----
+    - The spectral values and uncertainties are scaled by 1e10 for plotting purposes.
+    """
+
+    print("/nCalculate median spectrum and use to initialize StellSpec object...")
+    median_spectrum, err_median_spectrum = get_median_spectrum_and_unc(waveUnique, optspec2D,
+                                                                           flux_calibrated=flux_calibrated)
+
+    specdict = dict()
+    specdict["wave"] = waveUnique
+    specdict["yval"] = median_spectrum * 1e10
+    specdict["yerrLow"] = err_median_spectrum * 1e10
+    specdict["yerrUpp"] = err_median_spectrum * 1e10
+    t = table.Table(data=specdict)
+    if params["save_median_spectrum"]:
+        t.write(params["path_save_median_spectrum"], format="ascii.ecsv")
+    spec = psspec.StellSpec(t, inputtype="basic")
+
+    return spec
+
 def plot_median_spectrum_and_unc(wave_arr, median_spectrum, err_median_spectrum,
                                  label="Median from entire time series"):
     """
@@ -106,6 +532,69 @@ def plot_median_spectrum_and_unc(wave_arr, median_spectrum, err_median_spectrum,
     ax.legend(loc=1)
 
     return fig, ax
+
+def prep_spec_waveMasked(spec, params):
+    """
+    Preprocess a spectrum object by masking invalid or unwanted wavelength regions.
+
+    This function modifies a `StellSpec`-like spectrum object by:
+    - Removing wavelengths beyond the red limit of the PHOENIX model grid.
+    - Removing data points where the observed flux is NaN.
+    - Applying custom wavelength range masks defined in the `params` dictionary.
+    - Plotting the resulting masked spectrum with shaded regions indicating removed wavelength intervals.
+
+    Parameters
+    ----------
+    spec : psspec.StellSpec
+        A StellSpec-like object containing spectral data and methods for masking.
+
+    params : dict
+        Dictionary of parameters including:
+            - "wave_range_mask": list of lists, where each item defines a wavelength range to mask
+              (e.g., [[1.2, 1.3], [2.8, 3.0]]).
+
+    Returns
+    -------
+    spec : StellSpec object
+        The updated spectrum object with masked data removed.
+
+    fig2 : matplotlib.figure.Figure
+        The matplotlib figure showing the masked spectrum and shaded regions.
+
+    Notes
+    -----
+    - The wavelength red limit (5.39 µm) is hardcoded based on the PHOENIX model grid.
+    - NaN flux values are automatically identified and removed.
+    - The function assumes `spec` provides `.wave`, `.yval`, `.remDataByIndex()`, `.waveMin`, `.waveMax`, and `.plot()` attributes/methods.
+    """
+
+    print("\nRemoving any wavelengths longer than red end of PHOENIX model range... ")
+    # make sure we do not go over the limits of the PHOENIX model wavelength range
+    ind_torem_matchPHOENIX = np.where(np.array(spec.wave)>=5.39)
+    spec.remDataByIndex(ind_torem_matchPHOENIX[0])
+
+    print("\nRemoving any places where the observed flux contains NaNs... ")
+    # remove bins where the flux is NaN
+    all_yval= np.array(spec.yval)
+    ind_NaNs = np.argwhere(np.isnan(all_yval)).T
+    spec.remDataByIndex(ind_NaNs[0])
+
+    print("\nPlotting the spectrum with any discarded wavelength regions ")
+    # plot the spectrum before wavelength regions masking with regions shown on top
+    fig2, ax = plt.subplots(1,1)
+    spec.plot(ax=ax)
+    for i, mask_wv_range in enumerate(params["wave_range_mask"]):
+        ind_to_keep = np.where((spec.waveMax<mask_wv_range[0])+(spec.waveMin>mask_wv_range[1]))
+        ind_to_mask = np.where((spec.waveMax>=mask_wv_range[0])*(spec.waveMin<=mask_wv_range[1]))
+        spec.remDataByIndex(ind_to_mask[0])
+        ax.axvspan(mask_wv_range[0],mask_wv_range[1],zorder=-1000,color="gray",alpha=0.5)
+        print("Masking wave range ",mask_wv_range, "in median spectrum prior to fit!")
+        print("New wave shape:", spec.wave.shape)
+
+    ax.set_xlabel(r"Wavelength [$\mu$m]")
+    ax.set_ylabel(r"Flux (median in time)")
+    ax.set_title("Masked regions (WAVELENGTH)")
+    return spec, fig2
 
 def get_scaling_guess(param, T_grid, logg_grid, model_wv, models_grid, spec,
                       overwrite_param=True, wave_min_match_um=1.0, wave_max_match_um=2.0):
@@ -167,6 +656,28 @@ def get_scaling_guess(param, T_grid, logg_grid, model_wv, models_grid, spec,
         param["logFscale"] = np.log10(Fscale_guess)
         param["Fscale"] = Fscale_guess
     return Fscale_guess, model_int
+
+def calc_and_plot_Fscale_guess(param, Teffs_grid, loggs_grid, wv_template_thisR, models_grid_fixedR, spec):
+    print("\nGuessing Fscale value from the data...")
+    Fscale_guess, model_int = get_scaling_guess(param, Teffs_grid, loggs_grid, wv_template_thisR,
+                                                models_grid_fixedR, spec, wave_min_match_um=2.5,
+                                                wave_max_match_um=3.0)
+
+    # save the fixed R spectra as baseline specs to do the integration after the fact
+    fl_phot_spot_fac = get_closest_models_from_grid(param, models_grid_fixedR, Teffs_grid, loggs_grid)
+
+    print("\nPlotting default model with inferred initial guess Fscale applied...")
+    # Plot model closest to the data
+    fig3, ax = plt.subplots(1, 1, figsize=(10, 4))
+    ax.plot(spec.wave, spec.yval, color="k", zorder=0)  # plot the observed spectrum
+    ax.plot(wv_template_thisR, fl_phot_spot_fac[0] * Fscale_guess, color="r", label="Model", zorder=-1, alpha=0.2)
+    ax.plot(spec.wave, model_int * Fscale_guess, color="r", label="Model in data bandpass", zorder=-1)
+    ax.set_xlabel(r"Wavelength [$\mu$m]")
+    ax.set_ylabel(r'Stellar flux [$\times$ 10$^{-10}$ erg/s/cm$^2$/$\mu$m]')
+
+    ax.legend(loc=1)  # get nominal model from default parameters
+
+    return Fscale_guess, fl_phot_spot_fac, fig3
 
 ## Modeling
 
@@ -340,9 +851,82 @@ def get_closest_models_from_grid(param, models_grid_fixedR, Teffs_grid, loggs_gr
 
 ## MCMC setup
 
+def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir):
+    """
+    Save reference files used in a run to the results directory for reproducibility.
+
+    This function copies the main script, the INI configuration file, and a utility
+    script into a specified results directory, renaming them with standard names.
+
+    Parameters
+    ----------
+    this_dir : str
+        Path to the directory where the current scripts and INI file are located.
+
+    this_script : str
+        Filename of the main run script (e.g., 'exotune_runscript.py').
+
+    iniFile : str
+        Filename of the INI configuration file used for the run.
+
+    utils_script : str
+        Path to the utility script used by the main script (e.g., 'exotune_utilities.py').
+
+    res_dir : str
+        Path to the directory where the reference copies will be saved.
+    """
+
+    # ** Get .py files used to run this case and save to results directory
+    script_name = "exotune_runfile_thisrun.py"
+    utils_script_name = "exotune_utilities_thisrun.py"
+    iniFile_name = "iniFile_exotune_thisrun.py"
+
+    print("\nSaving files...")
+    print("\n--Run-analysis file...")
+    print("\n**This file:", this_dir + this_script)
+    print("Saved to file:", res_dir + script_name)
+    shutil.copy(this_dir + this_script, res_dir + script_name)
+    print("... Done.**")
+
+    print("\n--INI file...")
+    print("\n**This file:", this_dir + iniFile)
+    print("Saved to file:", res_dir + iniFile_name)
+    shutil.copy(this_dir + iniFile, res_dir + iniFile_name)
+    print("... Done.**")
+
+    print("\n--Utilities file...")
+
+    print("\n**This file:", utils_script)
+    print("Saved to file:", res_dir + utils_script_name)
+
+    shutil.copy(utils_script, res_dir + utils_script_name)
+    print("... Done.**")
+
+def get_default_logg(params):
+    """
+    Get the default values for the stellar log g
+
+    ----------
+    Parameters
+    ----------
+    params: dict
+    Dictionary obtained when reading in the ini file
+
+    -------
+    This dictionary is updated with logg_phot_default
+    """
+
+    # logg for MCMC
+    if params["logg_phot_source"] == "loggstar":
+        logg_phot = deepcopy(params["loggstar"])
+    elif params["logg_phot_source"] == "value":
+        logg_phot = deepcopy(params["logg_phot_value"])
+
+    params["logg_phot_default"] = logg_phot
+
 def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=True,
                                   fitThet=False, fitTphot=False, fitFscale=True,
-                                  fitlogg_phot=False, fitdlogg_het=False,
+                                  fitlogg_phot=False, fitlogg_het=False,
                                   fitLogfSpotFac=[0, 0],
                                   fiterrInfl=False,
                                   Fscale_guess=1, dlogg_het_guess=0.0):
@@ -369,7 +953,7 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
         If True, fit the flux scaling factor (logFscale). Default is True.
     fitlogg_phot : bool, optional
         If True, fit the photospheric surface gravity (logg_phot). Default is False.
-    fitdlogg_het : bool, optional
+    fitlogg_het : bool, optional
         If True, fit the difference in log(g) between photosphere and heterogeneities. Default is False.
     fitLogfSpotFac : list of bool, optional
         Two-element list indicating whether to fit log10 of spot and facula covering fractions,
@@ -446,11 +1030,52 @@ def init_default_and_fitted_param(Tphot, met, logg_phot, fitspot=True, fitfac=Tr
 
     if fitlogg_phot:
         fitparanames.append("loggphot")
-    if fitdlogg_het:
+    if fitlogg_het:
         fitparanames.append("dlogghet")
 
     return param, fitparanames
 
+def init_default_and_fitted_param_fromDict(params, Fscale_guess=1, dlogg_het_guess=0.0):
+    """
+    Initialize default stellar parameters and define which are to be fitted,
+    using a parameter dictionary input (e.g. parsed from an INI file).
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary containing model parameters and fit flags
+
+    Fscale_guess : float, optional
+        Initial guess for the flux scaling factor. Default is 1.
+
+    dlogg_het_guess : float, optional
+        Initial guess for the log(g) difference of heterogeneities. Default is 0.0.
+
+    Returns
+    -------
+    param : dict
+        Dictionary containing initialized model parameters and their default values.
+    fitparanames : list of str
+        List of parameter names to be varied during fitting.
+    """
+    fitLogfSpotFac = params["fitLogfSpotFac"]
+
+    return init_default_and_fitted_param(
+        Tphot=params["Teffstar"],
+        met=params["feh"],
+        logg_phot=params["logg_phot_default"],
+        fitspot=params.get("fitspot", True),
+        fitfac=params.get("fitfac", True),
+        fitThet=params.get("fitThet", True),
+        fitTphot=params.get("fitTphot", True),
+        fitFscale=params.get("fitFscale", True),
+        fitlogg_phot=params.get("fitlogg_phot", False),
+        fitlogg_het=params.get("fitlogg_het", False),
+        fitLogfSpotFac=fitLogfSpotFac,
+        fiterrInfl=params.get("fiterrInfl", False),
+        Fscale_guess=Fscale_guess,
+        dlogg_het_guess=dlogg_het_guess
+    )
 
 def get_derived_param(param):
     """
@@ -1720,4 +2345,182 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
 
     ax.set_title("Best-fit model")
     ax.legend(loc=4)
-    return fig, ax  
+    return fig, ax
+
+## Multiprocessing tools
+
+class FunctionCache:
+    """
+    A global container for storing a target function and its associated arguments,
+    intended to minimize pickling overhead when using multiprocessing.
+
+    Attributes
+    ----------
+    lnprob : callable
+        The target function to be evaluated in parallel.
+    lnprob_args : tuple
+        Positional arguments to pass to the function.
+    lnprob_kwargs : dict
+        Keyword arguments to pass to the function.
+    """
+    lnprob = None
+    lnprob_args = ()
+    lnprob_kwargs = {}
+
+def initializer(lnprob, lnprob_args=(), lnprob_kwargs={}):
+    """
+    Initializes the global FunctionCache with a function and its arguments.
+
+    Parameters
+    ----------
+    lnprob : callable
+        The function to evaluate.
+    lnprob_args : tuple, optional
+        Positional arguments for the function.
+    lnprob_kwargs : dict, optional
+        Keyword arguments for the function.
+    """
+    FunctionCache.lnprob = lnprob
+    FunctionCache.lnprob_args = lnprob_args
+    FunctionCache.lnprob_kwargs = lnprob_kwargs
+
+def lnprob_cache(theta):
+    """
+    Evaluates the cached function with the provided input.
+
+    Parameters
+    ----------
+    theta : any
+        The input to pass as the first argument to the cached function.
+
+    Returns
+    -------
+    The result of evaluating the cached function.
+    """
+    return FunctionCache.lnprob(theta, *FunctionCache.lnprob_args, **FunctionCache.lnprob_kwargs)
+
+class FunctionWrapper:
+    """
+    A simple function wrapper to bundle a function and its shared arguments,
+    useful for serialization-safe function calls.
+
+    Attributes
+    ----------
+    func : callable
+        The function to wrap.
+    args : tuple
+        The shared arguments to pass to the function.
+    """
+    def __init__(self, func, args):
+        """
+        Parameters
+        ----------
+        func : callable
+            The function to be called.
+        args : tuple
+            The shared arguments to apply with the function.
+        """
+        self.func = func
+        self.args = args
+
+    def __call__(self, theta):
+        """
+        Calls the wrapped function with the provided input and shared arguments.
+
+        Parameters
+        ----------
+        theta : any
+            The input to the function.
+
+        Returns
+        -------
+        The result of the function call.
+        """
+        return self.func(theta, *self.args)
+
+class MyPool:
+    """
+    A lightweight multiprocessing pool that avoids pickling large argument objects
+    by using a shared global cache (`FunctionCache`).
+
+    Methods
+    -------
+    map(func, iterable)
+        Applies the cached function over an iterable using worker processes.
+    close()
+        Easy stop of pool.
+    terminate()
+        Force stops the pool.
+    """
+    def __init__(self, processes, lnprob, lnprob_args=(), lnprob_kwargs={}):
+        """
+        Parameters
+        ----------
+        processes : int
+            Number of worker processes to use.
+        lnprob : callable
+            The function to be applied in parallel.
+        lnprob_args : tuple, optional
+            Positional arguments for the function.
+        lnprob_kwargs : dict, optional
+            Keyword arguments for the function.
+        """
+        self.pool = mp.Pool(
+            processes=processes,
+            initializer=initializer,
+            initargs=(lnprob, lnprob_args, lnprob_kwargs)
+        )
+
+    def map(self, func, iterable):
+        """
+        Applies the cached function to every item in the iterable using the pool.
+
+        Parameters
+        ----------
+        func : callable
+            Ignored; required to match map() signature.
+        iterable : iterable
+            Inputs to evaluate the function on.
+
+        Returns
+        -------
+        list
+            List of function results.
+        """
+        return self.pool.map(lnprob_cache, iterable)
+
+    def close(self):
+        """
+        Closes the pool and waits for all worker processes to exit.
+        """
+        self.pool.close()
+        self.pool.join()
+
+    def join(self):
+        """
+        Waits for the worker processes to exit.
+        """
+        self.pool.join()
+
+    def terminate(self):
+        """
+        Immediately terminates all worker processes.
+        """
+        self.pool.terminate()
+
+    def __enter__(self):
+        """
+        Enables use of `with` statement for context management.
+
+        Returns
+        -------
+        MyPool
+            The pool instance itself.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Ensures that the pool is closed when exiting a `with` block.
+        """
+        self.close()
