@@ -22,6 +22,10 @@ import pandas as pd
 import astropy.io as aio
 import matplotlib.gridspec as gridspec
 from astropy.convolution import convolve,  Gaussian1DKernel
+import configparser
+import argparse
+import shutil
+import os
 
 ##  --- Constants --- #
 
@@ -633,6 +637,110 @@ def BIC(chi2,nDataPoints,nPara):
 
 ##  define default param, fitparanames, parampriors
 
+def parse_all_input_iniFile(iniFile):
+    """
+    Parse an INI configuration file and command-line style arguments into a parameter dictionary.
+
+    Parameters
+    ----------
+    iniFile : str
+        Path to the INI configuration file
+
+    Returns
+    -------
+    params : dict
+        A dictionary where keys are parameter names and values are parsed from the INI file.
+        This dictionary can be used directly in downstream modeling and fitting code (after a bit of further parsing).
+    """
+
+    config = configparser.ConfigParser()
+    config.read(iniFile)
+
+    # %% Inputs for fit
+
+    print('\nReading in the inputs...')
+
+    parser = argparse.ArgumentParser(description='Inputs for stellar contamination retrieval.')
+
+    # --- [paths and labels] ---
+    parser.add_argument('-path_to_spec', help='Path to spectrum file',
+                        default=config.get('paths and labels', 'path_to_spec'))
+    parser.add_argument('-spec_format', help='Spectrum format (among TransSpec options)',
+                        default=config.get('paths and labels', 'spec_format'))
+    parser.add_argument('-stmodfile', help='Stellar model grid file path',
+                        default=config.get('paths and labels', 'stmodfile'))
+    parser.add_argument('-save_fit', help='Whether to save the fit results',
+                        type=bool,
+                        default=config.getboolean('paths and labels', 'save_fit'))
+    parser.add_argument('-res_suffix', help='Suffix for output files',
+                        default=config.get('paths and labels', 'res_suffix'))
+
+    # --- [stellar params] ---
+    parser.add_argument('-Teffstar', help='Effective temperature of star (K)',
+                        type=float, default=config.getfloat('stellar params', 'Teffstar'))
+    parser.add_argument('-feh', help='Metallicity [Fe/H]',
+                        type=float, default=config.getfloat('stellar params', 'feh'))
+    parser.add_argument('-loggstar', help='Log g of star',
+                        type=float, default=config.getfloat('stellar params', 'loggstar'))
+    parser.add_argument('-logg_phot_source', help='Source of default photospheric logg',
+                        default=config.get('stellar params', 'logg_phot_source'))
+    parser.add_argument('-logg_phot_value', help='Value if using custom default logg_phot',
+                        type=float, default=config.getfloat('stellar params', 'logg_phot_value'))
+    parser.add_argument('-logg_het_default_source', help='Source of default heterogeneity logg',
+                        default=config.get('stellar params', 'logg_het_default_source'))
+    parser.add_argument('-logg_het_value', help='Value if using custom default heterogeneity logg',
+                        type=float, default=config.getfloat('stellar params', 'logg_het_value'))
+
+    # --- [stellar models] ---
+    parser.add_argument('-logg_range', help='Range of logg values',
+                        default=config.get('stellar models', 'logg_range'))
+    parser.add_argument('-loggstep', help='Step size for logg grid',
+                        type=float, default=config.getfloat('stellar models', 'loggstep'))
+    parser.add_argument('-Teff_range', help='Teff range (min_max)',
+                        default=config.get('stellar models', 'Teff_range'))
+    parser.add_argument('-Teffstep', help='Step size for Teff grid',
+                        type=float, default=config.getfloat('stellar models', 'Teffstep'))
+    parser.add_argument('-resPower_target', help='Grid models resolving power',
+                        type=int, default=config.getint('stellar models', 'resPower_target'))
+    parser.add_argument('-wave_range', help='Wavelength range for the grid',
+                        default=config.get('stellar models', 'wave_range'))
+
+    # --- [MCMC params] ---
+    parser.add_argument('-nsteps', help='Number of MCMC steps',
+                        type=int, default=config.getint('MCMC params', 'nsteps'))
+    parser.add_argument('-frac_burnin', help='Burn-in fraction',
+                        type=float, default=config.getfloat('MCMC params', 'frac_burnin'))
+
+    # Fitting flags
+    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fitDscale']:
+        parser.add_argument(f'-{param}', help=f'Whether to fit {param}',
+                            type=bool, default=config.getboolean('MCMC params', param))
+
+    # --- [priors] ---
+    parser.add_argument('-gaussparanames', help='List of parameters with Gaussian priors',
+                        default=config.get('priors', 'gaussparanames'))
+    parser.add_argument('-hyperp_gausspriors', help='Means and stds of Gaussian priors',
+                        default=config.get('priors', 'hyperp_gausspriors'))
+    parser.add_argument('-fitLogfSpotFac', help='Log/linear prior flags for fspot/ffac',
+                        default=config.get('priors', 'fitLogfSpotFac'))
+    parser.add_argument('-hyperp_logpriors', help='Bounds of log prior on heterogeneity fraction(s)',
+                        default=config.get('priors', 'hyperp_logpriors'))
+
+    # --- [plotting] ---
+    parser.add_argument('-pad', help='Wavelength padding for plots (microns)',
+                        type=float, default=config.getfloat('plotting', 'pad'))
+    parser.add_argument('-target_resP', help='Model resolving power for plotting',
+                        type=int, default=config.getint('plotting', 'target_resP'))
+
+    # Parse arguments
+    args, unknown = parser.parse_known_args()
+
+    # make the params dict from the parser object
+
+    params = deepcopy(args.__dict__)
+
+    return params
+
 def init_default_and_fitted_param(Tphot, met, logg_phot,
                                   fitspot=True, fitfac=True, 
                                   fitThet=False, fitTphot=False, fitDscale=False,
@@ -733,6 +841,116 @@ def init_default_and_fitted_param(Tphot, met, logg_phot,
         
     return param, fitparanames
 
+
+def init_default_and_fitted_param_fromDict(input_para, Dscale_guess=7000):
+    """
+
+    Parameters
+    ----------
+    input_para : dict
+        dictionary of input parameters
+    Dscale_guess : float
+        Initial guess for Dscale parameter. Default is 7000.
+    Returns
+    -------
+    dict of default param values and list of fitted parameters.
+
+    """
+
+    param = dict()
+    fitparanames = []
+    param["Tphot"] = input_para["Teffstar"]
+    param["met"] = input_para["feh"]
+    param['logg_phot'] = input_para["logg_phot_default"]
+
+    param['logg_het'] = input_para["logg_het_default"]
+    param["dlogg_het"] = input_para["logg_het_default"] - input_para["logg_phot_default"]
+    param["deltaTspot"] = -150.
+    param["deltaTfac"] = 150.
+    param["Tspot"] = param["Tphot"] - 150.
+    param["Tfac"] = param["Tphot"] + 150.
+    param["Dscale"] = Dscale_guess
+
+    fitLogfSpotFac = parse_range_string(input_para["fitLogfSpotFac"], as_type=int)
+
+    if input_para["fitspot"]:
+        param["fspot"] = 0.02
+        if fitLogfSpotFac[0]:
+            param["log_fspot"] = np.log10(param["fspot"])
+            fitparanames.append("log_fspot")
+        else:
+            fitparanames.append("fspot")
+    else:
+        param["fspot"] = 0.
+
+    if input_para["fitfac"]:
+        param["ffac"] = 0.05
+        if fitLogfSpotFac[1]:
+            param["log_ffac"] = np.log10(param["ffac"])
+            fitparanames.append("log_ffac")
+        else:
+            fitparanames.append("ffac")
+    else:
+        param["ffac"] = 0.
+
+    if input_para["fitTphot"]:
+        fitparanames.append("Tphot")
+
+    if input_para["fitThet"]:
+        if input_para["fitspot"]:
+            fitparanames.append("deltaTspot")
+        if input_para["fitfac"]:
+            fitparanames.append("deltaTfac")
+
+    if input_para["fitDscale"]:
+        fitparanames.append("Dscale")
+
+    if input_para["fitlogg_phot"]:
+        fitparanames.append("logg_phot")
+    if input_para["fitlogg_het"]:
+        fitparanames.append("dlogg_het")
+
+    return param, fitparanames
+
+def parse_gaussian_inputs(input_para):
+    """
+    Parse Gaussian parameter names and corresponding hyperparameter priors.
+
+    Parameters
+    ----------
+    input_para : dict
+        dictionary of input parameters
+
+    Returns
+    -------
+    tuple
+        - gaussparanames : np.ndarray
+            Array of parameter names.
+        - hyperp_gausspriors : list of lists
+            List of [mean, std] values for each parameter.
+    """
+
+    # Handle parameter names
+    if input_para["gaussparanames"] == "":
+        gaussparanames = np.array([])
+    else:
+        gaussparanames = np.array(input_para["gaussparanames"].split('_'))
+
+    # Handle hyperparameter priors
+    if input_para["hyperp_gausspriors"] == "":
+        hyperp_gausspriors = []
+    else:
+        hyperp_gausspriors = [parse_range_string(pair) for pair in input_para["hyperp_gausspriors"].split('|')]
+
+    if len(hyperp_gausspriors) != len(gaussparanames):
+        raise ValueError(f"Number of hyperparameter ranges ({len(hyperp_gausspriors)}) does not match "
+                         f"number of Gaussian parameters ({len(gaussparanames)}).")
+
+    if len(gaussparanames):
+        print("** Using Gaussian prior on ", list(gaussparanames))
+
+    return gaussparanames, hyperp_gausspriors
+
 def get_derived_param(param):
     """
     Get derived model parameters from the fitted parameters
@@ -753,7 +971,34 @@ def get_derived_param(param):
     if "log_ffac" in param.keys():
         param["ffac"] = 10**param["log_ffac"] 
     return param
-    
+
+def get_default_logg(params):
+    """
+    Get the default values for the stellar and heterogeneity log g
+
+    ----------
+    Parameters
+    ----------
+    params: dict
+    Dictionary obtained when reading in the ini file
+
+    -------
+    This dictionary is updated with 2 more entries added by this function
+    """
+
+    # logg for MCMC
+    if params["logg_phot_source"] == "loggstar":
+        logg_phot = deepcopy(params["loggstar"])
+    elif logg_phot_source == "value":
+        logg_phot = deepcopy(params["logg_phot_value"])
+
+    if params["logg_het_default_source"] == "logg_phot":
+        logg_het_default = deepcopy(logg_phot)
+    elif logg_het_default_source == "value":
+        logg_het_default = deepcopy(params["logg_het_value"])
+
+    params["logg_phot_default"] = logg_phot
+    params["logg_het_default"] = logg_het_default
 
 def get_param_priors(param, gaussparanames,hyperp_gausspriors=[],
                      fitLogfSpotFac=[False,False], hyperp_logpriors=[],
@@ -855,6 +1100,91 @@ def format_param_str(param, fitparanames):
 
 ##  Make any stellar contamination model
 
+
+def parse_range_string(s, as_type=float):
+    """
+    Convert a string representing two numeric values into a list.
+
+    Parameters
+    ----------
+    s : str
+        A string with two numeric values separated by an underscore (e.g., "1.4_5.4").
+    as_type : type, optional
+        The type to cast the values to, either `float` (default) or `int`.
+
+    Returns
+    -------
+    list
+        A list containing the two values, cast to the specified type.
+
+    """
+    return [as_type(x) for x in s.split('_')]
+
+
+def get_stellar_model_grid(input_para,preprocessed=False):
+    """
+
+    Load a stellar model grid based on user-defined input parameters.
+
+
+    Parameters
+    ----------
+    input_para : dict
+        dictionary of input parameters
+    preprocessed: bool
+        whether or not the parameter ranges already have the right format
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - wv_template_thisR: ndarray, wavelength array
+        - wv_template_edges_thisR: ndarray, wavelength bin edges
+        - models_grid_fixedR: ndarray, model grid values
+    """
+    if preprocessed==False:
+        logg_range = parse_range_string(input_para["logg_range"])
+
+        if input_para["Teff_range"] == "default":
+            Teff_range = [np.min([2300. - input_para["Teffstar"], -100.]) + input_para["Teffstar"],
+                          input_para["Teffstar"] + 1000.]
+        else:
+            Teff_range = parse_range_string(input_para["Teff_range"])
+
+        wave_range = parse_range_string(input_para["wave_range"])
+    else:
+        logg_range = input_para["logg_range"]
+        wave_range = input_para["wave_range"]
+        Teff_range = input_para["Teff_range"]
+    print("Grid parameter ranges:")
+    print("logg:", logg_range)
+    print("Teff:", Teff_range)
+
+    wv_template_thisR, wv_template_edges_thisR = make_wavelength_array(wv_min_um=wave_range[0], wv_max_um=wave_range[1],
+                        resPower=input_para["resPower_target"], use_pymsg=True)
+
+
+    # check if the grid file exists
+    if os.path.exists(input_para["stmodfile"]):
+        print("Stellar model grid file existed! Reading it in...")
+        Teffs_grid = np.arange(Teff_range[0], Teff_range[1], input_para["Teffstep"])
+        loggs_grid = np.arange(logg_range[0], logg_range[1], input_para["loggstep"])
+
+        h5f = h5py.File(input_para["stmodfile"], 'r')
+
+        models_grid_fixedR = h5f['model_grid'][:]
+        h5f.close()
+        print("Grid loaded, file closed.")
+    # if not, generate it
+    else:
+        pdb.set_trace()
+        print("The stellar models grid does not exist !! It needs to first be \
+              created before running this file with create_fixedR_grid_pymsg.py !!")
+
+
+    print("Fixed resolution model grid shape:", models_grid_fixedR.shape)
+
+    return wv_template_thisR, wv_template_edges_thisR, Teffs_grid, loggs_grid, models_grid_fixedR
+
 def load_phoenix_models_from_param(param, resPower_target=10000, use_pymsg=True, pymsg_specgrid=None):
     """
     Load the Phoenix models for the photosphere, spots, and faculae from the parameter values
@@ -941,6 +1271,56 @@ def generate_PHOENIX_grid_fixedR(wv_target, wv_edges, feh=0.0, Teff_range=[], lo
     return Teffs_grid, loggs_grid, models_grid
 
 ##  Saving
+
+def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir):
+    """
+    Save reference files used in a run to the results directory for reproducibility.
+
+    This function copies the main script, the INI configuration file, and a utility
+    script into a specified results directory, renaming them with standard names.
+
+    Parameters
+    ----------
+    this_dir : str
+        Path to the directory where the current scripts and INI file are located.
+
+    this_script : str
+        Filename of the main run script (e.g., 'stellar_retrieval_runfile.py').
+
+    iniFile : str
+        Filename of the INI configuration file used for the run.
+
+    utils_script : str
+        Path to the utility script used by the main script (e.g., 'stellar_retrieval_utilities.py').
+
+    res_dir : str
+        Path to the directory where the reference copies will be saved.
+    """
+    # ** Get .py files used to run this case and save to results directory
+    script_name = "stellar_retrieval_runfile_thisrun.py"
+    utils_script_name = "stellar_retrieval_utilities_thisrun.py"
+    iniFile_name = "iniFile_thisrun.py"
+
+    print("\nSaving files...")
+    print("\n--Run-analysis file...")
+    print("\n**This file:", this_dir + this_script)
+    print("Saved to file:", res_dir + script_name)
+    shutil.copy(this_dir + this_script, res_dir + script_name)
+    print("... Done.**")
+
+    print("\n--INI file...")
+    print("\n**This file:", this_dir + iniFile)
+    print("Saved to file:", res_dir + iniFile_name)
+    shutil.copy(this_dir + iniFile, res_dir + iniFile_name)
+    print("... Done.**")
+
+    print("\n--Utilities file...")
+
+    print("\n**This file:", utils_script)
+    print("Saved to file:", res_dir + utils_script_name)
+
+    shutil.copy(utils_script, res_dir + utils_script_name)
+    print("... Done.**")
 
 def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparanames, save_fit):
     """
