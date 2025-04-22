@@ -3,9 +3,7 @@
 # Welcome to *stctm*!
 *stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components.
 
-If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see [Citation](#citation) section below).
-
-If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use. First public release associated to: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
+If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see [Citation](#citation) section below), and the first paper associated with the public release of the code: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
 
 Previous uses of the code:
 - Lim et al., 2023 ([TRAPPIST-1 b](https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract))
@@ -15,13 +13,13 @@ Previous uses of the code:
 
 Bare-bones skeleton of the code released for now - full user instructions and user-friendly setup to come soon!
 
-Example application: Visit 1 of TRAPPIST-1 b (Lim et al., 2023), fitting for spots and faculae with varying log g relative to the star.
+Data files for example applications of both the TLS retrieval on a small-planet transmission spectrum and the exotune retrieval on an out-of-transit stellar spectrum are provided with the module.
 
 ## Table of Contents
 
 - [Installation](#installation)
 - [Dependencies](#dependencies)
-- [Stellar Models](#stellar-models)
+- [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg)
 - [Stellar Contamination Retrieval vs. Stellar Spectrum Retrievals](#stellar-contamination-retrieval-vs-stellar-spectrum-retrievals)
 - [Stellar Contamination (TLSE) Retrievals](#stellar-contamination-tlse-retrievals-with-stctm)
   - [Run Instructions](#setting-up-a-retrieval-run-instructions)
@@ -53,7 +51,7 @@ You may also need
 
 To install *pymsg*, you can find instructions at https://msg.readthedocs.io/en/stable/ and then download the grid(s) of your choice from http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
 
-#### Create your own grid of stellar models using MSG
+## Create your own grid of stellar models using MSG
 
 If you choose to use the *MSG* module for stellar models, the code requires a pre-computed grid of stellar models for the planet of interest.
 I provide a template code snippet for how to go about computing this stellar models grid in ```create_fixedR_grid_pymsg_template.py```. Here are a few things to pay attention to.
@@ -387,4 +385,27 @@ Until the submission of this code for a JOSS publication, the following entry to
         publisher    = {Zenodo},
         url          = {https://doi.org/10.5281/zenodo.13153251}
         }
+
+    @ARTICLE{piaulet-ghorayeb_gj9827_2024,
+       author = {{Piaulet-Ghorayeb}, Caroline and {Benneke}, Bj{\"o}rn and {Radica}, Michael and {Raul}, Eshan and {Coulombe}, Louis-Philippe and {Ahrer}, Eva-Maria and {Kubyshkina}, Daria and {Howard}, Ward S. and {Krissansen-Totton}, Joshua and {MacDonald}, Ryan J. and {Roy}, Pierre-Alexis and {Louca}, Amy and {Christie}, Duncan and {Fournier-Tondreau}, Marylou and {Allart}, Romain and {Miguel}, Yamila and {Schlichting}, Hilke E. and {Welbanks}, Luis and {Cadieux}, Charles and {Dorn}, Caroline and {Evans-Soma}, Thomas M. and {Fortney}, Jonathan J. and {Pierrehumbert}, Raymond and {Lafreni{\`e}re}, David and {Acu{\~n}a}, Lorena and {Komacek}, Thaddeus and {Innes}, Hamish and {Beatty}, Thomas G. and {Cloutier}, Ryan and {Doyon}, Ren{\'e} and {Gagnebin}, Anna and {Gapp}, Cyril and {Knutson}, Heather A.},
+        title = "{JWST/NIRISS Reveals the Water-rich ``Steam World'' Atmosphere of GJ 9827 d}",
+      journal = {\apjl},
+     keywords = {Exoplanet atmospheres, Exoplanet atmospheric composition, Exoplanet atmospheric evolution, Exoplanet structure, Planetary atmospheres, Exoplanet astronomy, 487, 2021, 2308, 495, 1244, 486, Astrophysics - Earth and Planetary Astrophysics, Astrophysics - Solar and Stellar Astrophysics},
+         year = 2024,
+        month = oct,
+       volume = {974},
+       number = {1},
+          eid = {L10},
+        pages = {L10},
+          doi = {10.3847/2041-8213/ad6f00},
+archivePrefix = {arXiv},
+       eprint = {2410.03527},
+ primaryClass = {astro-ph.EP},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+
+
+
+If you use MSG for your stellar models, please make sure to also cite their JOSS paper (https://doi.org/10.21105/joss.04) - in any case, please cite where you got the stellar models from.
 
