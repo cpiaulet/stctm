@@ -1,22 +1,39 @@
 <img src="docs/figures/stctm_logo.png" width="256px"/>
 
 # Welcome to *stctm*!
-*stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components. 
+*stctm* (STellar ConTamination Modeling) performs spectral retrievals on **exoplanet transmission spectra** and (out of transit) **stellar spectra** assuming they can be explained by a combination of stellar surface spectral components.
 
-If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see Citation section below). 
-If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use.
-First public release associated to: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
+If you use this code, please cite the associated Zenodo repository (until the JOSS paper submission), with the following DOI: 10.5281/zenodo.13153251 (see [Citation](#citation) section below).
+
+If you use it, please make sure to also cite MSG (https://doi.org/10.21105/joss.04) and the source of the stellar models grid you use. First public release associated to: Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract).
 
 Previous uses of the code:
-* Lim et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), on TRAPPIST-1 b
-* Roy et al., 2023 (https://ui.adsabs.harvard.edu/abs/2023ApJ...954L..52R/abstract), on GJ 9827 d
-* Piaulet-Ghorayeb et al., 2024 (https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract), on GJ 9827 d
-* Radica et al., 2025 (https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract), on TRAPPIST-1 c
+- Lim et al., 2023 ([TRAPPIST-1 b](https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract))
+- Roy et al., 2023 ([GJ 9827 d](https://ui.adsabs.harvard.edu/abs/2023ApJ...954L..52R/abstract))
+- Piaulet-Ghorayeb et al., 2024 ([GJ 9827 d](https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract))
+- Radica et al., 2025 ([TRAPPIST-1 c](https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract))
 
 Bare-bones skeleton of the code released for now - full user instructions and user-friendly setup to come soon!
 
-I provide as an example for the application of *stctm* to Visit 1 of TRAPPIST-1 b (Lim et al., 2023, https://ui.adsabs.harvard.edu/abs/2023ApJ...955L..22L/abstract), fitting for two populations of heterogeneities: spots, faculae, and allowing the log g of the heterogeneities to vary relative to that of the star. 
+Example application: Visit 1 of TRAPPIST-1 b (Lim et al., 2023), fitting for spots and faculae with varying log g relative to the star.
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Dependencies](#dependencies)
+- [Stellar Models](#stellar-models)
+- [Stellar Contamination Retrieval vs. Stellar Spectrum Retrievals](#stellar-contamination-retrieval-vs-stellar-spectrum-retrievals)
+- [Stellar Contamination (TLSE) Retrievals](#stellar-contamination-tlse-retrievals-with-stctm)
+  - [Run Instructions](#setting-up-a-retrieval-run-instructions)
+  - [Modifying the ini File](#setting-up-a-retrieval-modifying-the-ini-file)
+  - [Post-processing](#post-processing)
+- [*exotune*: Retrievals on Stellar Spectra](#exotune-retrievals-on-stellar-spectra)
+  - [Run Instructions](#running-an-exotune-retrieval)
+  - [Post-processing](#post-processing-1)
+- [Citation](#citation)
+
+
+  
 ## Installation
 
 You can install *stctm* from GitHub:
