@@ -399,11 +399,8 @@ def main(argv):
 
 
         iplot = 0
-        # get parameter priors to use as bounds for the distributions
-        if params["ncpu"]>1:
-            parampriors = get_param_priors_parallel()
-        else:
-            parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
+
+        parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
 
         # bottom panels: distributions on the parameters
         for i in range(len(fitparanames)):
@@ -451,7 +448,8 @@ def main(argv):
     # try: #corner plot
     print("\nCreating corner plot...")
     fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit, param,
-                       gaussparanames,hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,Teffs_grid,loggs_grid)
+                       params["gaussparanames"],params["hyperp_gausspriors"],params["fitLogfSpotFac"],
+                                 params["hyperp_logpriors"],Teffs_grid,loggs_grid)
 
 
     suffix = "_custom"
