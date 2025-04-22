@@ -11,8 +11,6 @@ Previous uses of the code:
 - Piaulet-Ghorayeb et al., 2024 ([GJ 9827 d](https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract))
 - Radica et al., 2025 ([TRAPPIST-1 c](https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract))
 
-Bare-bones skeleton of the code released for now - full user instructions and user-friendly setup to come soon!
-
 Data files for example applications of both the TLS retrieval on a small-planet transmission spectrum and the exotune retrieval on an out-of-transit stellar spectrum are provided with the module.
 
 ## Table of Contents
