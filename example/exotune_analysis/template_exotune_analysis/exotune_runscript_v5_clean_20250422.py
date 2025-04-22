@@ -337,7 +337,7 @@ def main(argv):
 
         print("\nComputing statistics (chi-squared, BIC) on the run results...")
         xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models,
-                               res_dir, runname, save_fit=save_fit)
+                               res_dir, runname, save_fit=params["save_fit"])
 
 
         print("\nSaving default parameters to file...")
