@@ -178,7 +178,7 @@ By default, the code will produce (and save to the results folder):
 
 Inputs to the code:
 
-* a copy of the run file that was used
+* a copy of the run file that was used and of the .ini file with the specified inputs
 * a copy of the version of ```stellar_retrieval_utilities.py``` that was used
 * a figure displaying the spectrum being fitted
 * ```defaultparams```: CSV file with the default parameters used to initialize the fit
