@@ -2176,7 +2176,7 @@ def plot_exotune_samples_res(spec, param, fitparanames,
 
 
 def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.5,
-                        quantiles=[0.16, 0.5, 0.84], title_kwargs={'fontsize':14},
+                        quantiles=[0.16, 0.5, 0.84], title_kwargs={'fontsize':10},
                         hist_kwargs={"linewidth":3}, rg=None, 
                         show_titles=True, levels=(0.393,0.865,0.989), **kwargs):
     """
@@ -2314,15 +2314,11 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
     #                   truths = ordered_parabestfit[ind], truth_color="k")    
                                     
 
-    fig.set_dpi(50)  
+    fig.set_dpi(50)
     fig.set_figheight(11)
     fig.set_figwidth(15)
     # pdb.set_trace()
 
-    all_ax = fig.get_axes()
-    n_x = int(np.sqrt(len(all_ax)))
-    for ax in all_ax[-n_x:]:
-        ax.set_xlabel(ax.get_xlabel(), labelpad=5)  # defaults to 4.0
 
     return fig
 
