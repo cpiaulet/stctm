@@ -2317,9 +2317,11 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
     fig.set_dpi(50)  
     fig.set_figheight(11)
     fig.set_figwidth(15)
-    pdb.set_trace()
-    for ax in fig.get_axes()[-1,:]:
+    # pdb.set_trace()
 
+    all_ax = fig.get_axes()
+    n_x = int(np.sqrt(len(all_ax)))
+    for ax in all_ax[-n_x:]:
         ax.set_xlabel(ax.get_xlabel(), labelpad=5)  # defaults to 4.0
 
     return fig
