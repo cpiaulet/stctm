@@ -231,7 +231,7 @@ The ```.ini``` file structure mirrors that of the TLS-only retrievals; see above
 * The default analysis script is ```exotune_runscript_v5_clean_20250422.py``` and the default INI file is ```template_ini_exotune.ini```.
 * The results directory is found at the same folder structure level as ```exotune_analysis/```, and called ```exotune_results/```. A subfolder within ```exotune_results/``` is created for each retrieval you run. 
 
-Example command-line run instructions for an *exotune* retrieval, after navigating to ```exotune_analysis/template_exotune_analysis```:
+Example command-line run instructions for an *exotune* retrieval, after navigating to ```exotune_analysis/template_exotune_analysis``` (and replacing with your own file names):
 
     python exotune_runscript_v5_clean_20250422.py template_ini_exotune.ini
 
@@ -260,8 +260,9 @@ Under `[choice of inputs]`, you can configure which files to start from for the 
 * `stmodfile`: Path to the **stellar models grid** (see above how to generate it if needed).  
 
 #### Preprocessing options  
-Under `[preprocessing]`, you can set options related to initial spectrum preparation and light curve visualization before running the fit:
+Contrary to the TLS retrieval, with *exotune* you have the option to *only* do the pre-processing. That can be interesting for instance if you'd just like to take a look at the median-filtered light curve to identify which integrations to ignore, before settling on your final setup for the fit. In any case, if you set ```optimize_param``` to ```True```, the plots will be created but the code will stop short of running the retrieval.
 
+Under `[preprocessing]`, you can set options related to initial spectrum preparation and light curve visualization before running the fit:
 * `optimize_param`: `True` to stop after initial processing and optimization (e.g., for plotting or testing setup), **without** running the MCMC sampler. Useful when you're iterating on masks or visual inspection before a full run.
 * `obsmaskpattern`: A short label for the masking pattern you apply in time or wavelength space, which will be used in the names of the files created by the fit.  
 * `kern_size`:  Kernel size (in number of data points) for median filtering applied to the plotted light curve (does **not** affect the data used for the fit — just the smoothed version used in the light curve plot). Set to `None` to disable smoothing.
@@ -299,56 +300,42 @@ Under `[stellar models]`, you define the properties of the stellar model grid us
 * `wave_range`: The full wavelength range covered by the model grid (in microns). Format: `start_wavelength_end_wavelength`, e.g., `0.2_5.4`.
 
 
-#### Choosing the setup of your retrieval
 
-Contrary to the TLS retrieval, with *exotune* you have the option to *only* do the pre-processing. That can be interesting for instance if you'd just like to take a look at the median-filtered light curve to identify which integrations to ignore, before settling on your final setup for the fit. In any case, if you set ```optimize_param``` to ```True```, the plots will be created but the code will stop short of running the retrieval.
+#### MCMC sampling parameters  
+Under `[MCMC params]`, you can control how the parameter space is explored using MCMC sampling:
 
-Under ```User inputs: MCMC fitting params``` you can choose:
 * ```parallel```: if set to ```True```, then the MCMC will be run in parallel on a number of CPUs specified by the ```ncpu``` parameter right below (by default, 30)
-* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
+* `ncpu`: Number of CPUs to use for the parallel MCMC run.
+* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000.
 * ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
+
+#### Fit configuration  
+You can select which parameters to include in the fit:
 * ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
 * ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
 * ```fitThet```: ```True``` if you want to fit for the temperature of unocculted spots and/or faculae, ```False``` otherwise.
 * ```fitTphot```: ```True``` if you want to fit for the temperature of the photosphere, ```False``` otherwise.
 * ```fitlogg_phot```: ```True``` if you want to fit the photosphere log g, ```False``` otherwise.
-* ```fitdlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
+* ```fitlogg_het```: ```True``` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ```False``` otherwise.
+
+#### Options for treatment of data for data-model comparison
 
 The following parameters aim at accounting for the fact that the models need to be scaled to match your spectrum, as well as the imperfection of stellar models which often lead to large chi-squared differences between model and data.
 * ```fitFscale```: ```True``` if you want to fit a scaling factor to the model flux (recommended), ```False``` otherwise.
 * ```fiterrInfl```: ```True``` if you want to fit an error inflation factor to the provided data error bars (recommended), ```False``` otherwise.
-* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
 
-#### Priors and default values
+#### Priors on the fitted parameters
 
-You can set a Gaussian prior on any of your fitted parameters, using the ```gaussparanames``` and ```hyperp_gausspriors``` variables.
+You can set a Gaussian prior on any of your fitted parameters, using the ```gaussparanames``` and ```hyperp_gausspriors``` variables (set up the same way as for the TLSE retrievals above - see there for example usage).
 
-By default (uniform priors on all fitted parameters):
-```
-gaussparanames = np.array([])
-hyperp_gausspriors = []
-```
-Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ```gaussparanames```, and add an element to the list ```hyperp_gausspriors``` that consists of a 2-element list of ```[mean_gaussian_prior, std_gaussian_prior]```. Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE):
-```
-gaussparanames = np.array(["Tphot"])
-hyperp_gausspriors = [[Teffstar,70]] # mean and std of the Gaussian prior on Tphot
-```
-where here I used ```Teffstar``` instead of a value for the stellar effective temperature, as it was defined in the Stellar Parameters section above.
-
-The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ```fitLogfSpotFac``` parameter. 
-* Use ```fitLogfSpotFac = [0,0]``` for the default settings of both parameters fitted with linear-uniform priors
-* Set the first/second element to 1 instead to use a log-uniform priors on ```fspot```(```ffac```).
-* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = [lower_bound, upper_bound]```.
+The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ```fitLogfSpotFac``` parameter, with log-priors bounded according to the `hyperp_logpriors` parameter (following the same syntax as detailed above for TLSE retrievals). 
 
 If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```exotune_utilities.py```.
 
-### Running an *exotune* retrieval
+#### Plotting with *exotune*
 
-Once you have set up all the parameters in the run file, navigate to your ```exotune_analysis/``` directory and simply run
+To customize your plots, you can edit the parameters ```pad``` (roughly, the padding in microns added to the left and right of the spectrum plots compared to the extent of the observed spectrum), and ```target_resP``` which specifies the resolving power at which you wish your stellar spectra to be plotted.
 
-    python exotune_runscript_v3_clean_20250409.py
-
-(replacing with the name of your run script).
 
 ### Post-processing
 
@@ -357,8 +344,9 @@ By default, the code will produce (and save to the newly-created results folder 
 Inputs to the code:
 
 * a copy of the run file that was used
+* a copy of the ini file that was used
 * a copy of the version of ```exotune_utilities.py``` that was used
-* a figure displaying the spectrum being fitted
+* a figure displaying the fitted spectrum 
 * ```defaultparams```: CSV file with the default parameters used to initialize the fit
 
 Pre-processing:
@@ -374,7 +362,8 @@ CSV files:
 * ```fixedR_1_2_3_sigma``` file: a csv file containing a set of models at the resolving power ```target_resP``` (R=100 by default) corresponding to the max-likelihood, max-probability samples, and percentiles
 * ```blobs_1_2_3_sigma``` file: a csv file containing a set of models integrated within the bins of the observed spectrum corresponding to the max-likelihood, max-probability samples, and percentiles
 
-NPY file: contains the "blobs": the series of models computed by the MCMC.
+Calculated models:
+* NPY file containing the "blobs": the series of models computed by the MCMC.
 
 Diagnostics figures:
 * ```chainplot```: chain plots, with and without the burn-in steps.
