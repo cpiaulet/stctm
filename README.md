@@ -223,7 +223,7 @@ Please let me know if other things would be useful for you to have as default ou
 
 You can fit any stellar spectrum (loaded into the code as a ```pyStellSpec``` object) assuming it can be represented by a linear combination of 1-3 components: the photosphere, cooler regions (spots), and hotter regions (faculae). In the current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots. *exotune* can also be run in parallel on multiple core, which enables extremely fast inferences on large computing clusters despite the typically larger number of points in a stellar spectrum dataset.
 
-The example dataset provided under `example/observations/` for *exotune* is for a spectrum of TRAPPIST-1 (out-of-transit) observed with JWST NIRSpec/PRISM (a spectrum I obtained for Piaulet-Ghorayeb et al., in prep.). The units are microns for the wavelength and $\times 10^{-10} erg/cm^2/\mu m$ for the flux.
+The example dataset provided under `example/observations/` for *exotune* is a spectrum of TRAPPIST-1 (out-of-transit) observed with JWST NIRSpec/PRISM (a spectrum I obtained for Piaulet-Ghorayeb et al., in prep.). The units are microns for the wavelength and $\times 10^{-10} erg/cm^2/\mu m$ for the flux.
 
 ### Setting up an *exotune* retrieval: Run instructions
 
