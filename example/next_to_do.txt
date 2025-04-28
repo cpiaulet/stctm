@@ -1,8 +1,0 @@
-## add ini file
-## implement Nested Sampling
-## allow to fit different instruments or visits (offsets)
-## save the spec file
-## flexible setup of priors (user can choose range)
-## final organization (folder structure)
-## review test python files
-## add ability to post-process a case

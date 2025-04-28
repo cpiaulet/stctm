@@ -70,8 +70,8 @@ def main(argv):
 
     else:
         print("\nRead in median out-of-transit spectrum and use to initialize StellSpec object...")
-        t = aio.ascii.read(path_to_spec) # read in the spectrum that was provided
-        spec = psspec.StellSpec(t, inputtype=spec_format)
+        t = aio.ascii.read(params["path_to_spec"]) # read in the spectrum that was provided
+        spec = psspec.StellSpec(t, inputtype=params["spec_format"])
 
     ##  Apply operations to the StellSpec object
 
@@ -106,8 +106,8 @@ def main(argv):
         print("\nSaving previously-created figures...")
         if params["start_from_timeseries"]:
             fig1.savefig(this_dir + "exotune_select_time_"+res_suffix+'_preprocessOnly.png')
+            plt.close(fig1)
         fig2.savefig(this_dir + "exotune_select_wave_"+res_suffix+'_preprocessOnly.png')
-        plt.close(fig1)
         plt.close(fig2)
         fig3.savefig(this_dir + "exotune_get_fscale_"+res_suffix+'_preprocessOnly.png')
         plt.close(fig3)
@@ -128,23 +128,13 @@ def main(argv):
         runname = "fit"+label_run
         for p in fitparanames:
             runname = runname + "_"+p
-        runname = runname + res_suffix
+        runname = runname + "_"+res_suffix
         res_dir = "../../exotune_results/"+runname+"/"
         print("\nResults folder:", res_dir)
 
         # Setup for post-processing
         if not os.path.isdir(res_dir):
            os.makedirs(res_dir)
-
-        # Save previously-created figures
-        print("\nSaving previously-created figures...")
-        if params["start_from_timeseries"]:
-            fig1.savefig(res_dir + "exotune_select_time_"+runname+'.png')
-        fig2.savefig(res_dir + "exotune_select_wave_"+runname+'.png')
-        plt.close(fig1)
-        plt.close(fig2)
-        fig3.savefig(res_dir + "exotune_get_fscale_"+runname+'.png')
-        plt.close(fig3)
 
         #** Get .py files used to run this case
         this_dir = os.getcwd()+"/"
@@ -358,7 +348,6 @@ def main(argv):
                                        results_folder=res_dir, runname=runname)
 
         ax.set_xlim(np.min(spec.waveMin) - pad / 2, np.max(spec.waveMax) + pad)
-        ax.set_ylim(0.8 * np.median(spec.yval), 1.15 * np.median(spec.yval))
 
         if params["save_fit"]:
             fig.savefig(res_dir + "exotune_1_2_3_sigma_" + runname + ".pdf")
@@ -399,11 +388,8 @@ def main(argv):
 
 
         iplot = 0
-        # get parameter priors to use as bounds for the distributions
-        if params["ncpu"]>1:
-            parampriors = get_param_priors_parallel()
-        else:
-            parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
+
+        parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
 
         # bottom panels: distributions on the parameters
         for i in range(len(fitparanames)):
@@ -413,7 +399,7 @@ def main(argv):
 
                     axi.hist(samples[fitparanames[i]], ec="k", color="C1", alpha=0.7, histtype="stepfilled",bins=20)
                     # axi.set_xticklabels(axi.get_xticklabels(),fontsize=10)
-                    axi.tick_params(axis='x', labelsize=10)
+                    axi.tick_params(axis='x', labelsize=8,rotation=45)
                     axi.set_yticks([])
                     # axi.set_yticklabels([])
                     axi.set_xlabel(plotlabels[i])
@@ -428,10 +414,10 @@ def main(argv):
                     m1sig = perc_50 - perc_16
                     p1sig = perc_84 - perc_50
 
-                    perc_50_str = str(int(perc_50*1000)/1000)
-                    m1sig_str = str(int(m1sig*1000)/1000)
-                    p1sig_str = str(int(p1sig*1000)/1000)
-                    str_label = plotlabels[i] +"= "+perc_50_str+"$^{+"+p1sig_str+"}_{-"+m1sig_str+"}$"
+                    perc_50_str = str(int(perc_50*10)/10)
+                    m1sig_str = str(int(m1sig*10)/10)
+                    p1sig_str = str(int(p1sig*10)/10)
+                    str_label = perc_50_str+"$^{+"+p1sig_str+"}_{-"+m1sig_str+"}$"
                     axi.set_title(str_label,fontsize=10)
 
                     axi.set_xlim([low_range, upp_range])
@@ -451,7 +437,8 @@ def main(argv):
     # try: #corner plot
     print("\nCreating corner plot...")
     fig = xtu.plot_custom_corner(samples, fitparanames, parabestfit, param,
-                       gaussparanames,hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,Teffs_grid,loggs_grid)
+                       params["gaussparanames"],params["hyperp_gausspriors"],params["fitLogfSpotFac"],
+                                 params["hyperp_logpriors"],Teffs_grid,loggs_grid)
 
 
     suffix = "_custom"
