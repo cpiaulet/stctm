@@ -223,58 +223,81 @@ Please let me know if other things would be useful for you to have as default ou
 
 You can fit any stellar spectrum (loaded into the code as a ```pyStellSpec``` object) assuming it can be represented by a linear combination of 1-3 components: the photosphere, cooler regions (spots), and hotter regions (faculae). In the current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots. *exotune* can also be run in parallel on multiple core, which enables extremely fast inferences on large computing clusters despite the typically larger number of points in a stellar spectrum dataset.
 
-### Setting up a retrieval
+### Setting up an *exotune* retrieval: Run instructions
 
-In the way it is currently set up, *exotune* retrievals require entering the user inputs directly in the run script (top sections). I am working on a more user-friendly way of doing this using a setup file which should be added to the main branch soon.
+The ```.ini``` file structure mirrors that of the TLS-only retrievals; see above for how to set up the folder structure: [Run Instructions](#setting-up-a-retrieval-run-instructions) - with the following *exotune*-specific modifications
 
-#### File and environment paths
-The path to which files are saved does not depend on the name of the folder in which the main run file (in the example, ```exotune_runscript_v3_clean_20250409.py```), resides. However, relative paths matter as the results folder will reside in ```../../exotune_results/``` (run-specific results folder automatically created by the code). 
+* The analysis folder is ```exotune_analysis/any_analysis_folder_name/```: create your new analysis folder name under the ```exotune_analysis``` folder for each project you work on. In the example, that folder is called ```template_exotune_analysis/```.
+* The default analysis script is ```exotune_runscript_v5_clean_20250422.py``` and the default INI file is ```template_ini_exotune.ini```.
+* The results directory is found at the same folder structure level as ```exotune_analysis/```, and called ```exotune_results/```. A subfolder within ```exotune_results/``` is created for each retrieval you run. 
 
-Make sure that your environment paths are set up properly.
-Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
-You can do this via the command-line (see example below for ```CRDS_PATH```):
+Example command-line run instructions for an *exotune* retrieval, after navigating to ```exotune_analysis/template_exotune_analysis```:
 
-    export CRDS_PATH=/home/caroline/crds_cache
-   
-or in the code of the analysis file itself:
+    python exotune_runscript_v5_clean_20250422.py template_ini_exotune.ini
 
-    import os
-    os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+The inputs can be edited in the ini file or from the command line (see example below), as for the TLS retrievals.
+```
+    python exotune_runscript_v5_clean_20250422.py template_ini_exotune.ini -fitspot=0
+```
 
-#### Preprocessing options
+### Setting up an *exotune* retrieval: Modifying the ini file
 
-Contrary to its TLS counterpart, *exotune* can do a bit more when it comes to preprocessing. Namely, you can choose to either provide as an input:
-1. A time series of stellar spectra
-2. A unique stellar spectrum
+#### Choosing inputs and starting format  
+Under `[choice of inputs]`, you can configure which files to start from for the analysis and define which data files are being used:
 
-In scenario 1) (starting from a time series of spectra), the user can decide which time intervals to discard when constructing the spectrum.
-* The user may want to use the option to discard selected time intervals to omit spectra that were taken during the transit when constructing the out-of-transit spectrum, or spectra that are associated with flare events.
-* There is also the possibility to ignore certain wavelength intervals, e.g. if they are affected by saturation or contamination.
+* `label_obs`: a short label for this observational dataset (used internally to tag figures, results, or diagnostic plots).
+* `start_from_timeseries`:  
+  - Set to `True` if you are starting from a **stellar spectrum time series** (e.g., from the Stage 3 output of a pipeline like Eureka!).  
+  - Set to `False` if you are starting from a single, pre-processed **spectrum file**.
+* `save_median_spectrum`:  
+  - If `start_from_timeseries == True`, set this to `True` to **save the median spectrum** built from the time series for reuse or inspection.  
+* `path_save_median_spectrum`: Path to save the median spectrum CSV. Only used if `save_median_spectrum = True`.
+* `path_to_stellar_spec_ts`: Path to the **time series file** (e.g., an HDF5 output from Eureka!'s Stage 3), if `start_from_timeseries = True`.  
+* `path_to_spec`: Path to a single spectrum file, used **only if** `start_from_timeseries = False`.  
+* `spec_format`:  
+  - The format used to read the spectrum file into a `StellSpec` object. Options depend on how your spectrum is structured (e.g., `MR_csv`, `basic`).  
+  - If your file structure isn't yet supported, you can add a new format class in `pystellspec.py`.
+* `stmodfile`: Path to the **stellar models grid** (see above how to generate it if needed).  
 
-The current implementation supports the hdf5 files that are the Stage 3 outputs from Eureka!, but other formats can be implemented as well depending on your needs, by editing the code block under ```# Reading in the observed spectrum``` to obtain the 2D time series of spectra.
+#### Preprocessing options  
+Under `[preprocessing]`, you can set options related to initial spectrum preparation and light curve visualization before running the fit:
 
-In scenario 2), the assumption is that the spectrum is in the units of erg/s/cm$^2$/$\mu$m, and you will need to specify ```spec_format```, which is used by the ```pyStellSpec``` object to know how to read in your file. If the options provided in ```stctm/pystellspec.py``` do not match your needs, feel free to add one with a different name! 
+* `optimize_param`: `True` to stop after initial processing and optimization (e.g., for plotting or testing setup), **without** running the MCMC sampler. Useful when you're iterating on masks or visual inspection before a full run.
+* `obsmaskpattern`: A short label for the masking pattern you apply in time or wavelength space, which will be used in the names of the files created by the fit.  
+* `kern_size`:  Kernel size (in number of data points) for median filtering applied to the plotted light curve (does **not** affect the data used for the fit — just the smoothed version used in the light curve plot). Set to `None` to disable smoothing.
+* `jd_range_mask`: Optional custom time-domain mask, used to exclude portions of the stellar time series when computing the median spectrum. Formatted as a `|`-separated list of intervals: `start1_end1|start2_end2|...`. Leave empty if not using.
+* `wave_range_mask`: Optional custom wavelength-domain mask, applied similarly to `jd_range_mask` to exclude specific wavelength ranges from the analysis (e.g., saturated regions). Same format: `start1_end1|start2_end2|...`
 
 
-Input spectrum file:
+#### Saving options  
+Under `[saving options]`, you can control how the results of your run are saved and labeled:
+* ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
+* `res_suffix`:  A custom suffix added to all output files from this run, used as a unique identifier (make sure to modify each time to avoid overwriting results).  
 
-* Use ```label_obs``` to define a new setting in terms of where to look for your input files - whether you start from a time-series of spectra, setting ```start_from_timeseries``` to ```True```, or not. You will need to fill the paths under the first ```if start_from_timeseries:``` statement (line ~53) with the relevant information.
-* If you set ```start_from_timeseries=True```, then you can save to a csv file the stellar spectrum that will be created by the preprocessing steps. Just set ```save_median_spectrum=True```, and specify the path to the file where the spectrum should be saved as ```path_save_median_spectrum```.
+#### Stellar parameters  
+Under `[stellar params]`, you can define the key stellar properties used for the modeling:
 
-Selecting preprocessing choices (only actually matters if you selected ```start_from_timeseries=True```):
-
-You will need to specify an ```obsmaskpattern```, which is essentially a label for a set of preprocessing choices (set under the corresponding ```if obsmaskpattern == "XXX"``` statement). These include:
-* ```kern_size```: if set to ```None```, ignored. Otherwise, size of the median-filtering kernel applied prior to plotting of the median-normalized light curve (in order to help with identifying the transit start/end times for instance).
-* ```jd_range_mask```: leave as an empty list to use all spectra, or alternatively set to a list of arrays (or lists), each containing the ```[start_time, end_time]``` of the time window to discard prior to constructing the spectrum.
-* ```wave_range_mask```: same thing, for the wavelength axis.
-
-#### Setting up the stellar parameters
-
-Under ```User inputs: Stellar parameters```, enter the parameters of the star to set the defaults for the fit. Make sure that you have an option ("if" statement) matching the ```which_star``` setting you entered above.
+* `Teffstar`: Effective temperature of the star (in Kelvin).
+* `feh`: Stellar metallicity [Fe/H] in dex.
+* `loggstar`: Surface gravity (log(g)) of the star in cgs units (cm/s2).
+* ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g by default, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
 
 #### Reading in the grid of stellar models
+Under `[stellar models]`, you define the properties of the stellar model grid used for fitting the observed spectrum:
 
-Under ```User inputs: Read in stellar models grid```, modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid, and make sure you are pointing to the right file path.
+* `label_grid`: Short label for the stellar model grid used in this run (e.g., `PHOENIX_TRAPPIST_1`). Used in the saving of outputs.  
+* `logg_range`: Range of surface gravities (log(g), in cgs units) covered by the grid. Format: `minlogg_maxlogg`, e.g., `2.5_5.5`.
+* `loggstep`: The step size between log(g) values in the grid (in cgs units).
+* `Teff_range`: Defines the range of effective temperatures (Teff) used in the grid.  
+  - Options:  
+    - `default`: uses the default range calculation, with  
+      `min = np.min([2300.-Teffstar, -100.]) + Teffstar` and  
+      `max = Teffstar + 1000`.  
+    - `min_max`: if manually specifying a range instead (not shown here).
+* `Teffstep`: The temperature step (in Kelvin) between grid points for Teff.
+* `resPower_target`: The resolving power at which the grid spectra were computed.  
+* `wave_range`: The full wavelength range covered by the model grid (in microns). Format: `start_wavelength_end_wavelength`, e.g., `0.2_5.4`.
+
 
 #### Choosing the setup of your retrieval
 
@@ -318,10 +341,6 @@ The spot/faculae covering fractions can also be fitted with priors that are unif
 * If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ```hyperp_logpriors = [lower_bound, upper_bound]```.
 
 If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ```get_param_priors()``` in ```exotune_utilities.py```.
-
-* ```logg_phot_source```: ```value``` to use the value of ```logg_phot_value``` as the stellar photosphere log g by default, otherwise ```loggstar``` to use the value provided in the code block below containing the stellar parameters;
-
-* ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
 
 ### Running an *exotune* retrieval
 
