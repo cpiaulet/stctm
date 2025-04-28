@@ -297,8 +297,7 @@ def parse_all_input_exotune_iniFile(iniFile):
     # create the label for the run
     label_run = ""
     label_run = label_run + "Obs_"+params["label_obs"] + "_Mod_" + params["label_grid"]
-    if params["start_from_timeseries"]:
-        label_run = label_run + "_Mask" + params["obsmaskpattern"]
+    label_run = label_run + "_Mask" + params["obsmaskpattern"]
     if len(params["kern_size"])==0:
         params["kern_size"] = None
     else:
@@ -1756,6 +1755,27 @@ def get_labels_from_fitparanames(fitparanames):
             labels.append(r"log $g_\mathrm{phot}$")
     return labels
 
+def wrap_text(text, nchar=60):
+    """
+    Splits a long string (text, str.) by inserting '\n' every nchar (int.) characters,
+    ideally breaking at spaces for better readability.
+    """
+    words = text.split()
+    lines = []
+    current_line = ""
+
+    for word in words:
+        if len(current_line + ' ' + word) <= nchar:
+            current_line += ' ' + word if current_line else word
+        else:
+            lines.append(current_line)
+            current_line = word
+
+    if current_line:
+        lines.append(current_line)
+
+    return '\n'.join(lines)
+
 def format_param_str(param, fitparanames):
     """
     Generate a formatted summary string of stellar and fitted parameters.
@@ -1778,7 +1798,8 @@ def format_param_str(param, fitparanames):
     param = get_derived_param(param)
 
     str1 = "Fitted params: "+str(fitparanames)+"\n"
-    str1 = str1 + "Stellar params: Tphot="+str(int(param["Tphot"]*10.)/10.)+" met="+str(param["met"]) + "\n"
+    str1 = wrap_text(str1,50)
+    str1 = str1 + "\nStellar params: Tphot="+str(int(param["Tphot"]*10.)/10.)+" met="+str(param["met"]) + "\n"
     str1 = str1 + "logg_phot="+str(param["loggphot"]) + " logg_het="+str(param["logghet"])+ "\n"
     str1 = str1 + "Tspot="+str(int(param["Tspot"]*10.)/10.)+" Tfac="+str(int(param["Tfac"]*10.)/10.)+"\n"
     str1 = str1 + "fspot=" + str(int(param["fspot"]*10000.)/10000.) + " ffac="+str(int(param["ffac"]*10000)/10000.)
@@ -2286,7 +2307,7 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
     print("Shape of ordered_samples:",ordered_samples.shape)
     print("len of labels:",len(plotparams["labels"]))
 
-    print("\nProceed to plotting:")
+    print("\nProceed to plotting corner plot...")
     fig = plot_corner(ordered_samples, plotparams, smooth=0.8, fill_contours=True,
                       truths = ordered_parabestfit, truth_color="k")
     # fig = plot_corner(ordered_samples[:,ind], plotparams, smooth=0.8, fill_contours=True, 
@@ -2295,8 +2316,12 @@ def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
 
     fig.set_dpi(50)  
     fig.set_figheight(11)
-    fig.set_figwidth(15)   
-    
+    fig.set_figwidth(15)
+    pdb.set_trace()
+    for ax in fig.get_axes()[-1,:]:
+
+        ax.set_xlabel(ax.get_xlabel(), labelpad=5)  # defaults to 4.0
+
     return fig
 
 

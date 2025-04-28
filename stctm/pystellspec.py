@@ -82,8 +82,8 @@ class StellSpec(Table):
         self.waveMax = np.delete(self.waveMax, ind)
 
     def plot(self, ax=None, title=None, label=None,
-             xscale='linear', figsize=None, ylim=None, xticks=None, xticklabels=None, color="k", ls="",
-             marker="o", alpha=0.9, zorder=0, markersize=5, plotError=False,
+             xscale='linear', figsize=None, ylim=None, xticks=None, xticklabels=None, color="gray", ls="",
+             marker=".", alpha=0.9, zorder=0, markersize=1, plotError=False,
              **kwargs):
         """
         Plot the stellar spectrum.
