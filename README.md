@@ -24,8 +24,8 @@ Data files for example applications of both the TLS retrieval on a small-planet 
   - [Modifying the ini File](#setting-up-a-retrieval-modifying-the-ini-file)
   - [Post-processing](#post-processing)
 - [*exotune*: Retrievals on Stellar Spectra](#exotune-retrievals-on-stellar-spectra)
-  - [Run Instructions](#running-an-exotune-retrieval)
-  - [Post-processing](#post-processing-1)
+  - [Run Instructions](#setting-up-an-exotune-retrieval-run-instructions)
+  - [Post-processing](#setting-up-an-exotune-retrieval-modifying-the-ini-file1)
 - [Citation](#citation)
 
 
@@ -98,19 +98,19 @@ All the inputs you need to provide are specified in a ```.ini``` file, in a way 
 
 You should follow the following folder structure, starting with a copy of the ```stctm/example/``` directory anywhere in your installation you may want to run the code.
 * ```stellar_contamination_analysis/any_analysis_folder_name/```: my advice is to create a new analysis folder name under the ```stellar_contamination_analysis``` folder for each project you work on. In the example, that folder is called ```template_analysis/```.
-* In that folder, you'll need an analysis script (unless you need to customize things, you should just use a copy of ```stellar_retrieval_v14_generic_runfile.py```, and a ```.ini``` file, where you specify all the inputs following the instructions in the comments (see more information below).
+* In that folder, you'll need an analysis script (unless you need to customize things, you should just use a copy of ```stellar_retrieval_v15_generic_runfile.py```, and a ```.ini``` file, where you specify all the inputs following the instructions in the comments (see more information below).
 * At the same level as ```stellar_contamination_analysis/```, create a folder called ```stellar_contamination_results/```. For each of your runs, a subfolder will be added under this results directory and the run results will be saved there.
 
 Here is an example one-liner to run a *stctm* retrieval from a planet spectrum, after navigating to ```stellar_contamination_analysis/template_analysis```:
 
-    python stellar_retrieval_v14_generic_runfile.py template_ini_stctm.ini
+    python stellar_retrieval_v15_generic_runfile.py template_ini_stctm.ini
 
 A few additional tips:
 * The "ini file" (.ini) contains all the user input necessary to run the code, including stellar and mcmc parameters, saving paths and plotting options
 * The path to an "ini file" needs to be provided to the python (.py) script (if different from the default) *or* provided as an argument if the script is run from the command line
 * Any parameter in the ini file can be modified from the default using the command line (instead of modifying the file). For instance, if you want to run the same fit as above, but only modify the suffix used for creating the output directory, you can do it as follows:
 ```
-    python stellar_retrieval_v14_generic_runfile.py template_ini_stctm.ini -res_suffix=second_test
+    python stellar_retrieval_v15_generic_runfile.py template_ini_stctm.ini -res_suffix=second_test
 ```
 
 * Make sure that your environment paths are set up properly. Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
@@ -149,7 +149,10 @@ Under ```[stellar models]```, modify the range and spacing of the grid in the lo
 #### Choosing the setup of your retrieval
 
 Under ```[MCMC params]``` you can choose:
-* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000, but I chose 3000 to make the test run a bit quicker :)
+
+* ```parallel```: if set to ```True```, then the MCMC will be run in parallel on a number of CPUs specified by the ```ncpu``` parameter right below (by default, 30)
+* `ncpu`: Number of CPUs to use for the parallel MCMC run.
+* ```nsteps```: the number of steps for each of the MCMC chains. I recommend at least 5000.
 * ```frac_burnin```: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
 * ```fitspot```: ```True``` if you want to fit for the fraction of unocculted spots, ```False``` otherwise.
 * ```fitfac```: ```True``` if you want to fit for the fraction of unocculted faculae, ```False``` otherwise.
