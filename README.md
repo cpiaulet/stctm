@@ -236,6 +236,7 @@ The ```.ini``` file structure mirrors that of the TLS-only retrievals; see above
 * The analysis folder is ```exotune_analysis/any_analysis_folder_name/```: create your new analysis folder name under the ```exotune_analysis``` folder for each project you work on. In the example, that folder is called ```template_exotune_analysis/```.
 * The default analysis script is ```exotune_runscript_v5_clean_20250422.py``` and the default INI file is ```template_ini_exotune.ini```.
 * The results directory is found at the same folder structure level as ```exotune_analysis/```, and called ```exotune_results/```. A subfolder within ```exotune_results/``` is created for each retrieval you run. 
+* Make sure that your environment variables/paths are set up properly. If you get an issue and you are not sure, please refer to the commented-out lines at the top of the template run script and identify which are missing in your environment.
 
 Example command-line run instructions for an *exotune* retrieval, after navigating to ```exotune_analysis/template_exotune_analysis``` (and replacing with your own file names):
 
