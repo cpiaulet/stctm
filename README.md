@@ -407,10 +407,7 @@ Until the submission of this code for a JOSS publication, the following entry to
        number = {1},
           eid = {L10},
         pages = {L10},
-          doi = {10.3847/2041-8213/ad6f00},
-archivePrefix = {arXiv},
-       eprint = {2410.03527},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P},
+          doi = {10.3847/2041-8213/ad6f00}
 }
 
 
