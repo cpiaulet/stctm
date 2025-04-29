@@ -25,7 +25,8 @@ Data files for example applications of both the TLS retrieval on a small-planet 
   - [Post-processing](#post-processing)
 - [*exotune*: Retrievals on Stellar Spectra](#exotune-retrievals-on-stellar-spectra)
   - [Run Instructions](#setting-up-an-exotune-retrieval-run-instructions)
-  - [Post-processing](#setting-up-an-exotune-retrieval-modifying-the-ini-file1)
+  - [Modifying the ini File](#setting-up-an-exotune-retrieval-modifying-the-ini-file)
+  - [Post-processing](#post-processing-1)
 - [Citation](#citation)
 
 
