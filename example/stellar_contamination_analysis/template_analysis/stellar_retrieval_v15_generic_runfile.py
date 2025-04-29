@@ -14,6 +14,7 @@ v11: add option to fit photosphere log g
 v12: add possibility to fit fhet in log space
 v13: change for ffac, fspot
 v14: implement ini file for user inputs
+v15: implement parallel runs for TLS retrievals
 """
 
 ##------------------- Import modules ------------------#
@@ -21,22 +22,21 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-# make sure the environment variables are set up
-os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
-os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
-os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
+# make sure the environment variables are set up (see example below)
+# os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
+# os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+# os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
 
 import stctm.pytransmspec as ptspec
-import astropy.constants as const
 import pdb
 import emcee
 import astropy.table as table
-import h5py
-from copy import deepcopy
 import sys
 import astropy.io as aio
 
 import stctm.stellar_retrieval_utilities as sru
+import stctm.exotune_utilities as xtu
+
 import matplotlib.gridspec as gridspec
 
 
@@ -82,6 +82,8 @@ def main(argv):
     ## Load observed spectrum
     spec = ptspec.TransSpec(params["path_to_spec"], inputtype=params["spec_format"])
     # pdb.set_trace()
+
+
     ## Prepare for MCMC
     if 1:
 
@@ -116,6 +118,12 @@ def main(argv):
 
         sru.save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir)
 
+        print("Plotting fitted spectrum...")
+
+        # plot spectrum
+        fig, ax = spec.plot()
+        fig.savefig(results_folder + "stctm_fitted_spectrum.pdf")
+
         # define parameters for emcee run
         print("Setting up MCMC...")
         ndim, nwalkers = len(fitparanames), len(fitparanames) * 20
@@ -131,37 +139,58 @@ def main(argv):
         # dtype and names of blobs
         dtype = [("st_ctm_model", object)]
 
+        print("\nObtain values from spec object to save as picklable object for MCMC...")
+        # get the values we need from the spec object while keeping it picklable (only numpy arrays)
+        waveMin = np.array(spec["waveMin"])
+        waveMax = np.array(spec["waveMax"])
+        yval = np.array(spec["yval"])
+        yerrUpp = np.array(spec["yerrUpp"])
+        spec_pickleformat = (waveMin, waveMax, yval, yerrUpp)
+
         # define sampler
         # take fixed-R baseline spectra as inputs
-        other_args = (spec, param, fitparanames, gaussparanames, hyperp_gausspriors,
+        other_args = (spec_pickleformat, param, fitparanames, gaussparanames, hyperp_gausspriors,
                       fitLogfSpotFac, hyperp_logpriors,
                       fl_targetR_phot_spot_fac_baseline, Teffs_grid, loggs_grid,
                       wv_template_thisR, models_grid_fixedR)
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, sru.lnprob,
-                                        args=other_args,
-                                        blobs_dtype=dtype)
+
+
+        print("\nCreating sampler...")
+
+        if params["parallel"] is False:
+            print("Running serial version of the MCMC fit!")
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, sru.lnprob,
+                                            args=other_args,
+                                            blobs_dtype=dtype)
+            print("\nRunning MCMC...")
+
+            sampler.run_mcmc(pos, params["nsteps"], progress=True, store=True)
+        else:
+            print("Running parallel version of the MCMC fit on", params["ncpu"], "CPUs!")
+
+
+            with xtu.MyPool(processes=params["ncpu"], lnprob=sru.lnprob, lnprob_args=other_args) as pool:
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, ndim, None,  # lnprob is handled internally via the pool
+                    pool=pool,
+                    blobs_dtype=dtype
+                )
+
+                print("\nRunning MCMC...")
+                sampler.run_mcmc(pos, params["nsteps"], progress=True, store=True)
 
 
 
-    ## plot observed spectrum + run emcee
-    if 1:
-        print("Plotting fitted spectrum...")
-
-        # plot spectrum
-        fig, ax = spec.plot()
-        fig.savefig(results_folder + "stctm_fitted_spectrum.pdf")
-
-        print("Running MCMC...")
-
-        sampler.run_mcmc(pos, params["nsteps"], progress=True, store=True)
 
 
-        print("\nRecall -- MCMC setup:")
-        print("\n** Fitparanames:", fitparanames)
-        print("\n** Param: ", param)
+
 
     ## Post-process + Get blobs
     ## ----- Post-processing ----
+    print("\nRecall -- MCMC setup:")
+    print("\n** Fitparanames:", fitparanames)
+    print("\n** Param: ", param)
+
     if 1: # chainplot
 
 
@@ -250,6 +279,10 @@ def main(argv):
     if 1:
         # Blobs
         blobs = sampler.get_blobs()
+        if params["ncpu"]>1:
+            # Close the thread pool
+            pool.close()
+            pool.join()
         flat_st_ctm_models = blobs.T[:, burnin:]["st_ctm_model"].reshape((-1))
         if params["save_fit"]:
             np.save(results_folder+"st_ctm_model_blobs_"+runname+".npy", flat_st_ctm_models)

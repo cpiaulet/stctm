@@ -16,9 +16,10 @@ CLEAN_v0: move functions to utilities scripts
 ## ------------------- Import modules ------------------#
 import os
 
-os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
-os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
-os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
+# make sure your environment variables are set up (see example below)
+# os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
+# os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+# os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,13 +29,10 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import stctm.pystellspec as psspec
 import stctm.exotune_utilities as xtu
 import stctm.stellar_retrieval_utilities as sru
-import astropy.constants as const
 import emcee
 import astropy.table as table
 import sys
 import astropy.io as aio
-from copy import deepcopy
-from multiprocessing import Pool
 from matplotlib.gridspec import GridSpec
 
 
