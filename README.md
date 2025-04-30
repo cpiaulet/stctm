@@ -79,8 +79,9 @@ The template I provide sets a range of log g values (```logg_range```), stellar 
 I also compute the grid at a resolving power of 10,000 (```resPower_target```), and over a wavelength range from 0.2 to 5.4 microns (```wv_min_um``` and ```wv_max_um```), which you can also change to fit your needs.
 
 To calculate a grid of models, navigate to the folder where the run script resides, and simply run:
+```
     python create_fixedR_grid_pymsg_template.py
-
+```
 ## Stellar contamination retrieval vs. stellar spectrum retrievals
 
 Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
