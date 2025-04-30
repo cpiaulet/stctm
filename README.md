@@ -10,6 +10,7 @@ Previous uses of the code:
 - Roy et al., 2023 ([GJ 9827 d](https://ui.adsabs.harvard.edu/abs/2023ApJ...954L..52R/abstract))
 - Piaulet-Ghorayeb et al., 2024 ([GJ 9827 d](https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P/abstract))
 - Radica et al., 2025 ([TRAPPIST-1 c](https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract))
+- Ahrer et al., 2025 ([GJ 3090 b](https://ui.adsabs.harvard.edu/abs/2025arXiv250420428A/abstract))
 
 Data files for example applications of both the TLS retrieval on a small-planet transmission spectrum and the exotune retrieval on an out-of-transit stellar spectrum are provided with the module.
 
