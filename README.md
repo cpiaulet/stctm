@@ -18,7 +18,6 @@ Data files for example applications of both the TLS retrieval on a small-planet 
 
 - [Installation](#installation)
 - [Dependencies](#dependencies)
-- [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg)
 - [Stellar Contamination Retrieval vs. Stellar Spectrum Retrievals](#stellar-contamination-retrieval-vs-stellar-spectrum-retrievals)
 - [Stellar Contamination (TLSE) Retrievals](#stellar-contamination-tlse-retrievals-with-stctm)
   - [Run Instructions](#setting-up-a-retrieval-run-instructions)
@@ -28,6 +27,7 @@ Data files for example applications of both the TLS retrieval on a small-planet 
   - [Run Instructions](#setting-up-an-exotune-retrieval-run-instructions)
   - [Modifying the ini File](#setting-up-an-exotune-retrieval-modifying-the-ini-file)
   - [Post-processing](#post-processing-1)
+- [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg)
 - [Citation](#citation)
 
   
@@ -44,43 +44,17 @@ The dependencies of *stctm* are *NumPy*, *scipy*, *emcee*, *corner*, *astropy*, 
 
 #### Stellar models
 
-You may also need 
+You may also need the additional dependencies
 * *pysynphot* (if you want to use their version of the stellar models interpolator), and/or
 * *pymsg* (my personal favorite - needed to run ```create_fixedR_grid_pymsg_template.py```)
 
 To install *pymsg*, you can find instructions at https://msg.readthedocs.io/en/stable/ and then download the grid(s) of your choice from http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
 
-## Create your own grid of stellar models using MSG
+The code needs as an input a grid of stellar models as a function of wavelength, with a regular spacing in log g and effective temperature. The hdf5 file I use for TRAPPIST-1 for all the example listed below, that contains a grid of models generated with MSG, can be downloaded from the latest Zenodo link (`TRAPPIST_1_pymsg.h5`). If you want to reproduce without any edits to the code all the tests and examples mentioned below, you will need to save this file with a relative path of `../../R10000_model_grids/TRAPPIST_1_pymsg.h5` relative to where the example run files for *stctm* and *exotune* are located.
 
-If you choose to use the *MSG* module for stellar models, the code requires a pre-computed grid of stellar models for the planet of interest.
-I provide a template code snippet for how to go about computing this stellar models grid in ```create_fixedR_grid_pymsg_template.py```. Here are a few things to pay attention to.
+I also provide a code that enables you to generate your own grid of interpolated models using MSG for any star of your choosing, following the instructions under [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg).
 
-1. Make sure that your paths are set up properly.
-Specifically, you need to have the ```MESASDK_ROOT``` and ```MSG_DIR``` environment variables defined.
-You can do this via the command-line:
 
-    $ export MESASDK_ROOT=~/mesasdk
-   
-or in the code itself:
-
-    import os
-    os.environ['MESASDK_ROOT'] = "/home/caroline/mesasdk"
-
-3. Choose your stellar parameters.
-You will need to edit the star effective temperature, Fe/H, and log g. The cleanest way to do this is to add another code block corresponding to the name of your star
-
-4. Choose the stellar grid you already downloaded.
-In my case, I downloaded the ```'sg-Goettingen-HiRes.h5'```, but you can edit this to match the grid of your choice from the sample available at http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
-
-5. Edit the grid model parameters to match your needs
-The template I provide sets a range of log g values (```logg_range```), stellar effective temperature values (```Teff_range```), and a grid spacing (defined by ```loggstep``` and ```Teffstep```) that matches the default settings of the main code. You can however change these depending on your needs for the specific star-planet case. If you edit these, make sure to pay attention to the section "Setting up the stellar parameters and reading in the grid of stellar models" in the retrieval run instructions!
-
-I also compute the grid at a resolving power of 10,000 (```resPower_target```), and over a wavelength range from 0.2 to 5.4 microns (```wv_min_um``` and ```wv_max_um```), which you can also change to fit your needs.
-
-To calculate a grid of models, navigate to the folder where the run script resides, and simply run:
-```
-    python create_fixedR_grid_pymsg_template.py
-```
 ## Stellar contamination retrieval vs. stellar spectrum retrievals
 
 Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
@@ -384,6 +358,38 @@ Publication-ready figures:
 * a corner plot of post-burnin samples
 
 Please let me know if other things would be useful for you to have as default outputs, or feel free to create pull requests with your nice additions!
+
+## Create your own grid of stellar models using MSG
+
+If you choose to use the *MSG* module for stellar models, the code requires a pre-computed grid of stellar models for the planet of interest.
+I provide a template code snippet for how to go about computing this stellar models grid in ```create_fixedR_grid_pymsg_template.py```. Here are a few things to pay attention to.
+
+1. Make sure that your paths are set up properly.
+Specifically, you need to have the ```MESASDK_ROOT``` and ```MSG_DIR``` environment variables defined.
+You can do this via the command-line:
+
+    $ export MESASDK_ROOT=~/mesasdk
+   
+or in the code itself:
+
+    import os
+    os.environ['MESASDK_ROOT'] = "/home/caroline/mesasdk"
+
+3. Choose your stellar parameters.
+You will need to edit the star effective temperature, Fe/H, and log g. The cleanest way to do this is to add another code block corresponding to the name of your star
+
+4. Choose the stellar grid you already downloaded.
+In my case, I downloaded the ```'sg-Goettingen-HiRes.h5'```, but you can edit this to match the grid of your choice from the sample available at http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
+
+5. Edit the grid model parameters to match your needs
+The template I provide sets a range of log g values (```logg_range```), stellar effective temperature values (```Teff_range```), and a grid spacing (defined by ```loggstep``` and ```Teffstep```) that matches the default settings of the main code. You can however change these depending on your needs for the specific star-planet case. If you edit these, make sure to pay attention to the section "Setting up the stellar parameters and reading in the grid of stellar models" in the retrieval run instructions!
+
+I also compute the grid at a resolving power of 10,000 (```resPower_target```), and over a wavelength range from 0.2 to 5.4 microns (```wv_min_um``` and ```wv_max_um```), which you can also change to fit your needs.
+
+To calculate a grid of models, navigate to the folder where the run script resides, and simply run:
+```
+    python create_fixedR_grid_pymsg_template.py
+```
 
 ## Citation
 
