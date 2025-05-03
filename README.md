@@ -18,6 +18,7 @@ Data files for example applications of both the TLS retrieval on a small-planet 
 
 - [Installation](#installation)
 - [Dependencies](#dependencies)
+- [Testing your installation](#testing-your-installation)
 - [Stellar Contamination Retrieval vs. Stellar Spectrum Retrievals](#stellar-contamination-retrieval-vs-stellar-spectrum-retrievals)
 - [Stellar Contamination (TLSE) Retrievals](#stellar-contamination-tlse-retrievals-with-stctm)
   - [Run Instructions](#setting-up-a-retrieval-run-instructions)
@@ -54,6 +55,26 @@ The code needs as an input a grid of stellar models as a function of wavelength,
 
 I also provide a code that enables you to generate your own grid of interpolated models using MSG for any star of your choosing, following the instructions under [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg).
 
+## Testing your installation
+
+I created a dummy spectrum (with only 1 point) so you can run a few-second test of the code on your laptop for both serial and parallel runs. 
+
+0. Make sure you followed the installation instructions above and have a suitable stellar models grid at the path recommended above.
+1. Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
+2. Navigate to `stctm/example/stellar_contamination_analysis/` and run the following test:
+```
+python stellar_retrieval_v15_generic_runfile.py test_ini_stctm.ini
+```
+
+This should display print statements as the code is running, and create a directory with output files for this "mock" fit under `stellar_contamination_results/`.
+
+To test instead that the parallel version of the code works (with my custom wrapper around multiprocessing `Pool`), you can simply run:
+
+```
+python stellar_retrieval_v15_generic_runfile.py test_ini_stctm.ini -parallel=True -ncpu=2 -res_suffix=singlebin_testcode_parallel
+```
+
+... and that's it! You can read more below on how to customize what you do with *stctm*.
 
 ## Stellar contamination retrieval vs. stellar spectrum retrievals
 
