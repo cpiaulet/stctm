@@ -50,7 +50,7 @@ You may also need the additional dependencies
 
 To install *pymsg*, you can find instructions at https://msg.readthedocs.io/en/stable/ and then download the grid(s) of your choice from http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
 
-The code needs as an input a grid of stellar models as a function of wavelength, with a regular spacing in log g and effective temperature. The hdf5 file I use for TRAPPIST-1 for all the example listed below, that contains a grid of models generated with MSG, can be downloaded from the latest Zenodo link (`TRAPPIST_1_pymsg.h5`). If you want to reproduce without any edits to the code all the tests and examples mentioned below, you will need to save this file with a relative path of `../../R10000_model_grids/TRAPPIST_1_pymsg.h5` relative to where the example run files for *stctm* and *exotune* are located.
+The code needs as an input a grid of stellar models as a function of wavelength, with a regular spacing in log g and effective temperature. The hdf5 file I use for TRAPPIST-1 for all the example listed below, that contains a grid of models generated with MSG, can be downloaded from the latest Zenodo link: https://doi.org/10.5281/zenodo.15334399 (`TRAPPIST_1_pymsg.h5`). If you want to reproduce without any edits to the code all the tests and examples mentioned below, you will need to save this file with a relative path of `../../R10000_model_grids/TRAPPIST_1_pymsg.h5` relative to where the example run files for *stctm* and *exotune* are located.
 
 I also provide a code that enables you to generate your own grid of interpolated models using MSG for any star of your choosing, following the instructions under [Create your own grid of stellar models using MSG](#create-your-own-grid-of-stellar-models-using-msg).
 
@@ -421,5 +421,4 @@ Until the submission of this code for a JOSS publication, the following entry to
 
 
 
-If you use MSG for your stellar models, please make sure to also cite their JOSS paper (https://doi.org/10.21105/joss.04) - in any case, please cite where you got the stellar models from.
-
+If you use MSG for your stellar models, please make sure to also cite their JOSS paper (https://doi.org/10.21105/joss.04) - in any case, please cite where you got the stellar models from. 
