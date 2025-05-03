@@ -52,10 +52,9 @@ class TransSpec(Table):
             table=Table.read(inputpath,format='ascii.ecsv',delimiter=',')
 
             super(TransSpec,self).__init__(table)
-            self["wave"] = self["wave"]*1e3 # convert to microns from millimeters
-            self["waveMin"] = self["waveMin"]*1e3
-            self["waveMax"] = self["waveMax"]*1e3
+
             self.sort(keys=["waveMin"])
+
             self['wave'].unit=waveunit
             self['waveMin'].unit=waveunit
             self['waveMax'].unit=waveunit
@@ -65,13 +64,14 @@ class TransSpec(Table):
             self.meta['label']=label
             self.meta['color']=color
 
-        elif inputtype=='wavemicrons':
+        elif inputtype=='wavemm':
             table=Table.read(inputpath,format='ascii.ecsv',header_start=header_start)
             
             super(TransSpec,self).__init__(table)
-            self["wave"] = self["wave"]
-            self["waveMin"] = self["waveMin"]
-            self["waveMax"] = self["waveMax"]
+            self["wave"] = self["wave"]*1e3 # convert to microns from millimeters
+            self["waveMin"] = self["waveMin"]*1e3
+            self["waveMax"] = self["waveMax"]*1e3
+
             self.sort(keys=["waveMin"])
             self['wave'].unit=waveunit
             self['waveMin'].unit=waveunit
