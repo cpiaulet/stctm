@@ -12,7 +12,7 @@ Previous uses of the code:
 - Radica et al., 2025 ([TRAPPIST-1 c](https://ui.adsabs.harvard.edu/abs/2025ApJ...979L...5R/abstract))
 - Ahrer et al., 2025 ([GJ 3090 b](https://ui.adsabs.harvard.edu/abs/2025arXiv250420428A/abstract))
 
-Data files for example applications of both the TLS retrieval on a small-planet transmission spectrum and the exotune retrieval on an out-of-transit stellar spectrum are provided with the module.
+Data files for example applications of both the TLS retrieval on a small-planet transmission spectrum and the exotune retrieval on an out-of-transit stellar spectrum are provided with the module, under `observations/`.
 
 ## Table of Contents
 
@@ -29,7 +29,6 @@ Data files for example applications of both the TLS retrieval on a small-planet 
   - [Modifying the ini File](#setting-up-an-exotune-retrieval-modifying-the-ini-file)
   - [Post-processing](#post-processing-1)
 - [Citation](#citation)
-
 
   
 ## Installation
@@ -95,6 +94,8 @@ With ```stctm```, you can either fit **transmission spectra** to obtain constrai
 
 You can fit any transmission spectrum (loaded into the code as a ```TransSpec``` object) assuming any variations from a straight line are due to the transit light source effect. In its current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
 
+The example dataset provided under `example/observations/` for *stctm* is a transmission spectrum of TRAPPIST-1 b (visit 1 from Lim et al., 2023 where I ran *stctm*) observed with JWST NIRISS/SOSS. The units are millimeters for the wavelength (hence the choice of `wavemm` for `spec_format`, see below) and ppm for the transit depth.
+
 ### Setting up a retrieval: Run instructions
 
 All the inputs you need to provide are specified in a ```.ini``` file, in a way similar to what I implemented for *smint* (github.com.cpiaulet/smint). 
@@ -131,7 +132,7 @@ or in the code of the analysis file itself:
 
 #### Setting up labels and path to spectrum file
 Under ```[paths and labels]`` you can set up:
-* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```TransSpec``` object using the ```spec_format``` setting you choose - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```pytransspec.py```!)
+* ```path_to_spec``` (path to your spectrum file) as well as ```spec_format``` (your spectrum is read in from your data file as a ```TransSpec``` object using the ```spec_format``` setting you choose). You can choose `basic` for `spec_format` if your spectrum already has all the right column names and wavelength in microns, or `wavemm` if the wavelengths are in millimeters - if you are not sure which option to choose, or need to add another option to read in your specific format, you can do so in ```stctm/pytransspec.py```!
 * ```res_suffix```: a suffix used for all the files that will be saved as a result of this run, in the results folder. This is the identifier you can use to record information on the spectrum, the setup of the fit, etc: make sure it is unique to avoid overwriting the contents of your results folder!
 * ```stmodfile```: the path to your stellar models grid file, in the HDF5 format
 * ```save_fit```: ```True``` to save files to the results directory during the post-processing steps.
