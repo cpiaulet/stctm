@@ -1,4 +1,14 @@
 from setuptools import setup
+import os
 
-if __name__ == "__main__":
-    setup()
+def read_version():
+    with open(os.path.join("stctm", "__init__.py")) as f:
+        for line in f:
+            if line.startswith("__version__"):
+                delim = '"' if '"' in line else "'"
+                return line.split(delim)[1]
+
+setup(
+    # other args...
+    version=read_version(),
+)
