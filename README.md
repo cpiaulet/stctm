@@ -43,13 +43,11 @@ You can install *stctm* from GitHub:
     pip install -e .
     
 ### Dependencies
-The dependencies of *stctm* are *NumPy*, *scipy*, *emcee*, *corner*, *astropy*, *h5py*, *matplotlib*, *pandas*, *tqdm* (for progress bar with MCMC retrievals).
+The dependencies of *stctm* are *NumPy*, *scipy*, *emcee*, *corner*, *astropy*, *h5py*, *matplotlib*, *pandas*, *pysynphot*, *tqdm* (for progress bar with MCMC retrievals).
 
 #### Stellar models
 
-You may also need the additional dependencies
-* *pysynphot* (if you want to use their version of the stellar models interpolator), and/or
-* *pymsg* (my personal favorite - needed to run ```create_fixedR_grid_pymsg_template.py```)
+You may also need the additional dependency *pymsg* (my personal favorite - needed to run ```create_fixedR_grid_pymsg_template.py```)
 
 To install *pymsg*, you can find instructions at https://msg.readthedocs.io/en/stable/ and then download the grid(s) of your choice from http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids.
 
@@ -63,7 +61,7 @@ I created a dummy spectrum (with only 1 point) so you can run a few-second test 
 
 0. Make sure you followed the installation instructions above and have a suitable stellar models grid at the path recommended above.
 1. Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
-2. Navigate to `stctm/example/stellar_contamination_analysis/` and run the following test:
+2. Navigate to your copy of `stellar_contamination_analysis/template_analysis/` and run the following test:
 ```
 python stellar_retrieval_v15_generic_runfile.py test_ini_stctm.ini
 ```
