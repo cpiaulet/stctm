@@ -16,7 +16,7 @@ affiliations:
   - name: Department of Astronomy \& Astrophysics, University of Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA
     index: 1
   - name: E. Margaret Burbridge Prize Postdoctoral Fellow
-     index: 2
+    index: 2
 date: 05 May 2025
 bibliography: paper.bib
 
