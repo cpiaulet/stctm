@@ -39,11 +39,17 @@ I recommend to install *stctm* in a clean conda environment, as with any new pac
 Example command-line commands could look like this:
 
 ```
-  conda create -n mystctm_env python=3.10.4
-  conda activate mystctm_env
+conda create -n mystctm_env python=3.10.4
+conda activate mystctm_env
 ```
 
-You can then install *stctm* from GitHub:
+You can then install *stctm* using pip:
+
+```commandline
+pip install stctm
+```
+
+Alternatively, you can clone it directly from GitHub and place it in your installation at the path of your choice:
 
     git clone https://github.com/cpiaulet/stctm.git
     cd stctm
@@ -66,9 +72,20 @@ I also provide a code that enables you to generate your own grid of interpolated
 
 I created a dummy spectrum (with only 1 point) so you can run a few-second test of the code on your laptop for both serial and parallel runs. 
 
-0. Make sure you followed the installation instructions above and have a suitable stellar models grid at the path recommended above.
 1. Copy the contents of ```stctm/example/``` wherever in your installation you want to run the code.
-2. Navigate to your copy of `stellar_contamination_analysis/template_analysis/` and run the following test:
+2. Make sure you have a suitable stellar models grid at the path recommended above.
+3. Confirm that your environment paths are set up properly. Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
+You can do this via the command-line (see example below for ```CRDS_PATH```):
+```
+export CRDS_PATH=/home/caroline/crds_cache
+```  
+or in the code of the analysis file itself:
+```
+import os
+os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+```
+
+4. Navigate to your copy of `stellar_contamination_analysis/template_analysis/` and run the following test:
 ```
 python stellar_retrieval_v15_generic_runfile.py test_ini_stctm.ini
 ```
@@ -119,16 +136,6 @@ A few additional tips:
     python stellar_retrieval_v15_generic_runfile.py template_ini_stctm.ini -res_suffix=second_test
 ```
 
-* Make sure that your environment paths are set up properly. Specifically, you need to have the ```CRDS_SERVER_URL```, ```CRDS_PATH```, and ```PYSYN_CDBS``` environment variables defined.
-You can do this via the command-line (see example below for ```CRDS_PATH```):
-```
-    export CRDS_PATH=/home/caroline/crds_cache
-```  
-or in the code of the analysis file itself:
-```
-    import os
-    os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
-```
 
 ### Setting up a retrieval: Modifying the ini file
 
