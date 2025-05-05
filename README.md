@@ -36,7 +36,14 @@ Data files for example applications of both the TLS retrieval on a small-planet 
 
 I recommend to install *stctm* in a clean conda environment, as with any new package.
 
-You can install *stctm* from GitHub:
+Example command-line commands could look like this:
+
+```
+  conda create -n mystctm_env python=3.10.4
+  conda activate mystctm_env
+```
+
+You can then install *stctm* from GitHub:
 
     git clone https://github.com/cpiaulet/stctm.git
     cd stctm
