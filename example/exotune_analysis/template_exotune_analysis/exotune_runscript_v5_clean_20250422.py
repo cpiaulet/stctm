@@ -324,7 +324,7 @@ def main(argv):
             plt.close(fig)
 
         print("\nComputing statistics (chi-squared, BIC) on the run results...")
-        xtu.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models,
+        xtu.save_bestfit_stats(spec, sampler, ind_bestfit, fitparanames, flat_oot_spec_models,
                                res_dir, runname, save_fit=params["save_fit"])
 
 
@@ -387,7 +387,11 @@ def main(argv):
 
         iplot = 0
 
-        parampriors = xtu.get_param_priors(param,[],Fscale_guess=Fscale_guess)
+        parampriors = xtu.get_param_priors(param, params["gaussparanames"],
+                                           hyperp_gausspriors=params["hyperp_gausspriors"],
+                                           fitLogfSpotFac=params["fitLogfSpotFac"],
+                                           hyperp_logpriors=params["hyperp_logpriors"],
+                                           T_grid=Teffs_grid, logg_grid=loggs_grid, Fscale_guess=Fscale_guess)
 
         # bottom panels: distributions on the parameters
         for i in range(len(fitparanames)):

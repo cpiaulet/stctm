@@ -294,7 +294,7 @@ def main(argv):
         if params["save_fit"]:
             fig.savefig(results_folder+"stctm_bestfit_model_with_obs_"+runname+".png")
 
-        sru.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models,
+        sru.save_bestfit_stats(spec, sampler, ind_bestfit, fitparanames, flat_st_ctm_models,
                                results_folder, runname, save_fit=params["save_fit"])
 
         t_defaultparam = table.Table([param])
