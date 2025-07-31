@@ -1547,7 +1547,8 @@ def BIC(chi2,nDataPoints,nPara):
 
     return chi2 + nPara*np.log(nDataPoints)
 
-def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, results_folder, runname, save_fit=True):
+def save_bestfit_stats(spec, sampler, ind_bestfit, fitparanames, flat_oot_spec_models, results_folder,
+                       runname, save_fit=True):
     """
     Compute and optionally save summary statistics (red/chi2, BIC) for the best-fit model.
 
@@ -1556,6 +1557,8 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, re
     spec : object
         Observed spectrum object, expected to contain attributes:
         `yval` (observed flux values) and `yerrLow` (associated uncertainties).
+    sampler :
+        emcee sampler
     ind_bestfit : int
         Index of the best-fit model (typically from maximum likelihood).
     fitparanames : list of str
@@ -1587,8 +1590,13 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, re
     bestfit_stats["chi2"] = np.sum((spec.yval - best_model) ** 2. / spec.yerrLow ** 2.)
     bestfit_stats["redchi2"] = bestfit_stats["chi2"] / n_dof
     bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"], nDataPoints, nPara)
-    t_bestfit_stats = table.Table([bestfit_stats])
 
+    # get autocorrelation timescales
+    taumax = np.max(sampler.get_autocorr_time(quiet=True))
+    bestfit_stats["t_autocorr_max"] = taumax
+
+    t_bestfit_stats = table.Table([bestfit_stats])
+    
     if save_fit:
         print("Writing to file...")
         aio.ascii.write(t_bestfit_stats, results_folder + "exotune_bestfit_stats_" + runname + '.csv', format='csv',

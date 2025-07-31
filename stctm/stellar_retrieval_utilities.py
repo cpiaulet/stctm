@@ -1421,12 +1421,15 @@ def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparan
     return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
 
 
-def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, results_folder, runname, save_fit=True):
+def save_bestfit_stats(spec, sampler, ind_bestfit, fitparanames, flat_st_ctm_models, results_folder,
+                       runname, save_fit=True):
     """
     Save the best fit statistics to a csv file
 
     spec: TransSpec object
         (planet atmosphere observations in transmission)
+    sampler : 
+        emcee sampler
     ind_bestfit: int
         index of the best fit
     fitparanames: list of str
@@ -1452,6 +1455,11 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, resu
     bestfit_stats["chi2"] = np.sum((spec['yval'] - best_model) ** 2. / spec["yerrLow"] ** 2.)
     bestfit_stats["redchi2"] = bestfit_stats["chi2"] / n_dof
     bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"], nDataPoints, nPara)
+
+    # get autocorrelation timescales
+    taumax = np.max(sampler.get_autocorr_time(quiet=True))
+    bestfit_stats["t_autocorr_max"] = taumax
+
     t_bestfit_stats = table.Table([bestfit_stats])
 
     if save_fit:
