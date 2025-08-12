@@ -11,7 +11,7 @@ tags:
 authors:
   - name: Caroline Piaulet-Ghorayeb
     orcid: 0000-0002-2875-917X
-    affiliation: 1,2
+    affiliation: "1,2"
 affiliations:
   - name: Department of Astronomy \& Astrophysics, University of Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA
     index: 1
@@ -72,7 +72,7 @@ Users are encouraged to propose or contribute any other features.
 Here are a few open-source codes that offer functionalities focused on retrievals of the TLSE or on out-of-transit stellar spectra:
 
 - Generic atmospheric retrievals (including TLSE-only retrievals on transmission spectra): `POSEIDON` [@poseidon]
-- Retrievals on out-of-transit stellar spectra (Nested Sampling): `StellarFit` [@StellarFit]
+- Retrievals on out-of-transit stellar spectra (Nested Sampling): `StellarFit` [@Radica:2025]
 
 # Acknowledgements
 `stctm` relies heavily on other Python libraries which include `numpy` [@harris2020array], `scipy` [@2020SciPy-NMeth], `astropy` [@astropy:2013; @astropy:2018], `matplotlib` [@Hunter:2007], `pandas`[@pandas:2020], `emcee`[@ForemanMackey:2013], `corner` [@corner], and `pysynphot` [@pysynphot]. 
