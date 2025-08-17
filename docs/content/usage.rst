@@ -1,3 +1,0 @@
-STCTM Usage Guide
-=================
-

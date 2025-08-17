@@ -905,14 +905,16 @@ def get_default_logg(params):
     """
     Get the default values for the stellar log g
 
-    ----------
     Parameters
     ----------
     params: dict
     Dictionary obtained when reading in the ini file
-
-    -------
     This dictionary is updated with logg_phot_default
+
+    Returns
+    -------
+    None
+
     """
 
     # logg for MCMC
@@ -1130,7 +1132,7 @@ def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
     -------
     dict
         Dictionary mapping each parameter name to a [lower_bound, upper_bound] list representing its prior range.
-        For parameters fitted in log-space, the key is prefixed with 'log_'.
+        For parameters fitted in log-space, the key is prefixed with 'log' followed by underscore.
     """
 
     defaultpriors = dict()
@@ -1634,8 +1636,7 @@ def xspeclog(ax, xlim=None, level=1, fmt="%2.1f"):
         The matplotlib axis object on which to set the log-scale x-axis ticks.
     xlim : tuple of float, optional
         Optional (xmin, xmax) tuple to explicitly set the x-axis limits.
-    level : int or float, default=1
-        Preset level for tick density and appearance:
+    level : int or float, default=1. Preset level for tick density and appearance:
             - 0.5 : Dense major ticks (0.2 to 6, step 0.2) and finer minor ticks (step 0.1)
             - 1   : Standard major ticks at typical wavelengths (e.g., 1.0, 1.5, 2.0, ...)
                     and minor ticks at 0.1 intervals
@@ -1757,8 +1758,19 @@ def get_labels_from_fitparanames(fitparanames):
 
 def wrap_text(text, nchar=60):
     """
-    Splits a long string (text, str.) by inserting '\n' every nchar (int.) characters,
+    Splits a long string (text, str.) by inserting a line break every nchar (int.) characters,
     ideally breaking at spaces for better readability.
+    Parameters
+    ----------
+    text : str
+        The input string to be wrapped.
+    nchar : int, default=60
+        Maximum number of characters per line before inserting a line break.
+
+    Returns
+    -------
+    str
+        The input string with line breaks inserted for wrapping.
     """
     words = text.split()
     lines = []
