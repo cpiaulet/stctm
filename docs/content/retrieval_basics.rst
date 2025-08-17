@@ -34,12 +34,12 @@ Running a retrieval
 
 Typically, running a retrieval should only entail the following steps:
 
-1. Navigate via the command line to the analysis directory where you have your ini file and the template run file.
-2. Run the template run file with the ini file as an argument,
+1. Navigate via the command line to the analysis directory where you have your ini file.
+2. Run using the neat ``stctm_TLS``/``stctm_exotune`` CLI utility and with the ini file as an argument,
 
-e.g.::
+so in the command line, this looks like e.g.::
 
-   python stellar_retrieval_v15_generic_runfile.py your_ini_file.ini
+   stctm_TLS your_ini_file.ini
 
 or for the stellar spectrum retrievals::
 

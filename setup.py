@@ -14,14 +14,13 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        # put your dependencies here, e.g.:
-        # "numpy", "matplotlib", "astropy", "emcee",
+        # dependencies can be managed in setup.cfg if you want,
+        # but leaving this here is fine if you prefer.
     ],
     entry_points={
         "console_scripts": [
             "stctm_TLS=stctm.cli.stctm_tls:main",
-            # later you’ll add exotune too:
-            # "stctm_exotune=stctm.cli.stctm_exotune:main",
+            "stctm_exotune=stctm.cli.stctm_exotune:main",  # ✅ added
         ],
     },
 )

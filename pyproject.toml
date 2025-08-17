@@ -2,5 +2,3 @@
 requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[project.scripts]
-stctm_TLS = "stctm.cli.stctm_tls:main"

@@ -55,12 +55,12 @@ Run instructions
 You should follow the following folder structure, starting with a copy of the ``stctm/example/`` directory anywhere in your installation you may want to run the code.
 
 * ``stellar_contamination_analysis/any_analysis_folder_name/``: my advice is to create a new analysis folder name under the ``stellar_contamination_analysis`` folder for each project you work on. In the example, that folder is called ``template_analysis/``.
-* In that folder, you'll need an analysis script (unless you need to customize things, you should just use a copy of ``stellar_retrieval_v15_generic_runfile.py``), and a ``.ini`` file, where you specify all the inputs following the instructions in the comments (see more information below).
+* In that folder, you'll need to have at least one ``.ini`` file, where you specify all the inputs following the instructions in the comments (see more information below).
 * At the same level as ``stellar_contamination_analysis/``, create a folder called ``stellar_contamination_results/``. For each of your runs, a subfolder will be added under this results directory and the run results will be saved there.
 
-Here is an example one-liner to run a *stctm* retrieval from a planet spectrum, after navigating to ``stellar_contamination_analysis/template_analysis``::
+Here is an example one-liner to run a *stctm* retrieval from a planet spectrum, after navigating to ``stellar_contamination_analysis/template_analysis`` and in the command line::
 
-    python stellar_retrieval_v15_generic_runfile.py template_ini_stctm.ini
+    stctm_TLS template_ini_stctm.ini
 
 A few additional tips:
 
@@ -68,7 +68,7 @@ A few additional tips:
 - The path to an "ini file" needs to be provided as an argument if the script is run from the command line
 - Any parameter in the ini file can alternatively be modified from the default using the command line (instead of modifying the file). For instance, if you want to run the same fit as above, but only modify the suffix used for creating the output directory, you can do it as follows::
 
-    python stellar_retrieval_v15_generic_runfile.py template_ini_stctm.ini -res_suffix=second_test
+    stctm_TLS template_ini_stctm.ini -res_suffix=second_test
 
 Modifying the ini file to make it your own
 ------------------------------------------

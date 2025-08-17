@@ -47,17 +47,22 @@ Setting up an *exotune* retrieval: Run instructions
 The ``.ini`` file structure largely mirrors that of TLS retrievals (see :ref:`runningTLS` for folder layout). The key exotune-specific modifications are:
 
 * The analysis folder is ``exotune_analysis/any_analysis_folder_name/``. Create a new folder for each project under ``exotune_analysis/``, e.g., ``template_exotune_analysis/``.
-* The default analysis script is ``exotune_runscript_v5_clean_20250422.py`` and the default INI file is ``template_ini_exotune.ini``.
+* The default INI file is ``template_ini_exotune.ini`` which you can use as a starting point to build your own.
 * Results are saved in ``exotune_results/``, a sibling folder to ``exotune_analysis/``. Each run produces a subfolder in ``exotune_results/``.
-* Ensure all environment variables and paths are correctly set (refer to comments at the top of the run script for requirements).
+* Ensure all environment variables and paths are correctly set (refer to comments at the top of the run script for requirements), copied here::
 
-Example command to run exotune, after navigating to your analysis folder::
+    # make sure your environment variables are set up (see example below)
+    # os.environ['CRDS_SERVER_URL'] = "https://jwst-crds.stsci.edu"
+    # os.environ['CRDS_PATH'] = "/home/caroline/crds_cache"
+    # os.environ['PYSYN_CDBS'] = "/home/caroline/trds"
 
-    python exotune_runscript_v5_clean_20250422.py template_ini_exotune.ini
+Example command to run exotune using the CLI helper, after navigating to your analysis folder::
+
+    stctm_exotune template_ini_exotune.ini
 
 Inputs can be edited in the INI file or passed as command-line arguments. For instance, to switch off ``fitspot``::
 
-    python exotune_runscript_v5_clean_20250422.py template_ini_exotune.ini -fitspot=0
+    stctm_exotune template_ini_exotune.ini -fitspot=0
 
 Modifying the INI file to make it your own
 ------------------------------------------
@@ -237,7 +242,7 @@ Under ``[plotting]``::
 Post-processing
 ---------------
 
-By default, *exotune* generates and saves the following to the results directory:
+By default, *exotune* generates and saves the following files to a custom directory created under ``exotune_results/``, starting with the prefix "fit". If only preprocessing is run (i.e., ``optimize_param = True``), or if the starting point is a time-series of spectra, the results from this preprocessing step will be in a folder starting with "preprocessOnly".
 
 Inputs and recordkeeping:
 
