@@ -31,14 +31,14 @@ import stctm.pytransmspec as ptspec
 import pdb
 import emcee
 import astropy.table as table
+import sys
 import astropy.io as aio
 
 import stctm.stellar_retrieval_utilities as sru
 import stctm.exotune_utilities as xtu
 
 import matplotlib.gridspec as gridspec
-from stctm.runners.tls_runner import run_from_ini
-import sys
+
 
 ## The main code starts here
 
@@ -355,40 +355,20 @@ def main(argv):
 
 
 ##
-
-
 if __name__ == "__main__":
-    ini = sys.argv[1] if len(sys.argv) > 1 else None
-    raise SystemExit(run_from_ini(ini))
+    main(sys.argv)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## CLI add-on
+# small convenience wrapper
+def run_from_ini(ini_path = None):
+    """
+    Entry point equivalent to:
+        python stellar_retrieval_runfile.py <ini_file.ini>
+    """
+    argv = ["stctm_TLS"]
+    if ini_path:
+        argv.append(ini_path)
+    return int(main(argv) or 0)
 
 
 
