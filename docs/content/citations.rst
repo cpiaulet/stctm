@@ -60,3 +60,4 @@ If you use MSG for your stellar models, please also cite their JOSS paper
 `https://doi.org/10.21105/joss.04 <https://doi.org/10.21105/joss.04>`_.
 
 In any case, please cite where you obtained the stellar models from.
+You may also cite the libraries that *stctm* relies on as dependencies: *NumPy*, *scipy*, *emcee*, *corner*, *astropy*, *h5py*, *matplotlib*, *pandas*, *pysynphot*, and *tqdm*.

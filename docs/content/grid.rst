@@ -43,7 +43,7 @@ The way to specify this in the code is as follows::
    I also compute the grid at a resolving power of 10,000 (``resPower_target``), and over a wavelength range from 0.2 to 5.4 microns (``wv_min_um`` and ``wv_max_um``), which you can also change to fit your needs by editing the following lines::
 
     logg_range = [2.5,5.5]
-    Teff_range = [np.min([2300.-param["Tphot"], -100.])+param["Tphot"], param["Tphot"]+1000.]
+    Teff_range = [np.max([param["Tphot"]-1000, 2300.]), param["Tphot"]+1000.]
     loggstep = 0.1 #cgs
     Teffstep = 20. #K
     resPower_target = 10000

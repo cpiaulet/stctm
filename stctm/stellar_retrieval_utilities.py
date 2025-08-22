@@ -22,6 +22,8 @@ import pandas as pd
 import astropy.io as aio
 import matplotlib.gridspec as gridspec
 from astropy.convolution import convolve, Gaussian1DKernel
+import stctm.pytransmspec as ptspec
+
 import configparser
 import argparse
 import shutil
@@ -368,24 +370,42 @@ def parse_gaussian_inputs(input_para):
 
 def get_derived_param(param):
     """
-    Get derived model parameters from the fitted parameters
+    Compute derived stellar/fit parameters from the input dictionary.
 
     Parameters
     ----------
     param : dict
-        dictionary of default param values .
+        Dictionary of default/fitted parameter values.
 
     Returns
     -------
-    param with Tspot, Tfac, fspot, ffac updated
+    dict
+        Updated dictionary with derived parameters added/overwritten.
     """
+    # Temperatures
     param["Tspot"] = param["Tphot"] + param["deltaTspot"]
     param["Tfac"] = param["Tphot"] + param["deltaTfac"]
-    param["logg_het"] = param["logg_phot"] + param["dlogg_het"]
-    if "log_fspot" in param.keys():
+
+    # Surface gravity offsets (for both TLS retrieval and exotune naming styles)
+    if "logg_phot" in param and "dlogg_het" in param:
+        param["logg_het"] = param["logg_phot"] + param["dlogg_het"]
+    elif "loggphot" in param and "dlogghet" in param:
+        param["logghet"] = param["loggphot"] + param["dlogghet"]
+
+    # Flux scaling (ExoTUNE only)
+    if "logFscale" in param:
+        param["Fscale"] = 10 ** param["logFscale"]
+
+    # Error inflation (ExoTUNE only)
+    if "logErrInfl" in param:
+        param["errInfl"] = 10 ** param["logErrInfl"]
+
+    # Covering fractions
+    if "log_fspot" in param:
         param["fspot"] = 10 ** param["log_fspot"]
-    if "log_ffac" in param.keys():
+    if "log_ffac" in param:
         param["ffac"] = 10 ** param["log_ffac"]
+
     return param
 
 
@@ -419,9 +439,38 @@ def get_default_logg(params):
     params["logg_het_default"] = logg_het_default
 
 
-def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
-                     fitLogfSpotFac=[False, False], hyperp_logpriors=[],
-                     T_grid=[2300, 10000], logg_grid=[], Dscale_guess=7000.):
+
+def _norm_keys(param):
+    # accept both TLS retrieval and stellar spectrum retrieval key conventions
+    """
+    Normalize keys in the parameter dictionary to a common format.
+
+    Parameters
+    ----------
+    param : dict
+
+    Returns
+    -------
+    dict
+
+    """
+    p = dict(param)
+    if "logg_phot" in p and "loggphot" not in p:
+        p["loggphot"] = p["logg_phot"]
+    if "logghet" not in p and "logg_het" in p:
+        p["logghet"] = p["logg_het"]
+    if "dlogghet" not in p and "dlogg_het" in p:
+        p["dlogghet"] = p["dlogg_het"]
+    return p
+
+def get_param_priors_master(
+    param, gaussparanames, hyperp_gausspriors=None,
+    fitLogfSpotFac=(False, False), hyperp_logpriors=None,
+    T_grid=(2300., 10000.), logg_grid=(2.5, 5.5),
+    mode="flux",
+    Fscale_guess=1.0,
+    Dscale_guess=7000.0
+):
     """
     Query for parameter prior values.
 
@@ -441,81 +490,190 @@ def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
         grid of temperatures for the grid of models (models_grid)
     logg_grid: numpy 1d array
         grid of loggs for the grid of models (models_grid)
+    mode: str
+        "flux" for ExoTUNE, "depth" for TLS Retrieval.
+    Fscale_guess: float
+        Initial guess for Fscale parameter (for exotune). Default is 1.0.
     Dscale_guess: float
-        Initial guess for Dscale parameter. Default is 7000.
+        Initial guess for Dscale parameter (for TLS retrieval). Default is 7000.
 
     Returns
     -------
     dictionary of parameter priors in the form of [low, high] for uniform priors.
 
     """
+    hyperp_gausspriors = hyperp_gausspriors or []
+    hyperp_logpriors = hyperp_logpriors or []
 
-    defaultpriors = dict()
+    p = _norm_keys(param)
 
-    defaultpriors['ffac'] = [0., 0.9]
-    defaultpriors['fspot'] = [0., 0.9]
-    defaultpriors['deltaTfac'] = [100, T_grid[-1] - param["Tphot"]]
-    defaultpriors['deltaTspot'] = [T_grid[0] - param["Tphot"], -100.]
-    defaultpriors["Tphot"] = [T_grid[0], T_grid[-1]]
-    defaultpriors["Dscale"] = [0.8 * Dscale_guess, 1.2 * Dscale_guess]
-    defaultpriors["logg_phot"] = [np.max([logg_grid[0], 2.5]), np.min([5.5, logg_grid[-1]])]
-    defaultpriors["dlogg_het"] = [logg_grid[0] - param["logg_phot"], 0.]
+    if mode == "flux":
+        defaultpriors = dict(
+            ffac=[0., 0.9],
+            fspot=[0., 0.9],
+            deltaTfac=[100., T_grid[-1] - p["Tphot"]],
+            deltaTspot=[T_grid[0] - p["Tphot"], -100.],
+            Tphot=[T_grid[0], T_grid[-1]],
+            loggphot=[max(logg_grid[0], 2.5), min(5.5, logg_grid[-1])],
+            dlogghet=[logg_grid[0] - p["loggphot"], 0.],
+        )
+    elif mode == "depth":
+        defaultpriors = dict(
+            ffac=[0., 0.9],
+            fspot=[0., 0.9],
+            deltaTfac=[100., T_grid[-1] - p["Tphot"]],
+            deltaTspot=[T_grid[0] - p["Tphot"], -100.],
+            Tphot=[T_grid[0], T_grid[-1]],
+            logg_phot=[max(logg_grid[0], 2.5), min(5.5, logg_grid[-1])],
+            dlogg_het=[logg_grid[0] - p["loggphot"], 0.],
+        )
+    if mode == "flux":
+        defaultpriors["logFscale"] = [np.log10(Fscale_guess) - 5, np.log10(Fscale_guess) + 5]
+        if "logErrInfl" in param.keys():
+            defaultpriors["logErrInfl"] = [0., np.log10(50.)]
+    elif mode == "depth":
+        defaultpriors["Dscale"] = [0.8 * Dscale_guess, 1.2 * Dscale_guess]
+    else:
+        raise ValueError(f"Unknown mode '{mode}'; use 'flux' or 'depth'.")
 
-    parampriors = dict()
+    # list of names we will return priors for
+    if mode == "flux":
+        common = ['ffac', 'fspot', 'deltaTfac', 'deltaTspot', 'Tphot', 'loggphot', 'dlogghet']
+    elif mode == "depth":
+        common = ['ffac', 'fspot', 'deltaTfac', 'deltaTspot', 'Tphot', 'logg_phot', 'dlogg_het']
 
-    # check parameters for log priors
-    allparanames = ['ffac', "fspot", "deltaTfac", "deltaTspot", "Tphot", "Dscale", "logg_phot", "dlogg_het"]
+    mode_specific = ['logFscale','logErrInfl'] if mode == "flux" else ['Dscale']
+    allparanames = common + mode_specific
+
+    parampriors = {}
     for par in allparanames:
         if par not in ["fspot", "ffac"]:
             parampriors[par] = defaultpriors[par]
         else:
-            if par == "fspot":
-                if fitLogfSpotFac[0]:
-                    lowlim = hyperp_logpriors[0]
-                    upplim = hyperp_logpriors[1]
-                    parampriors["log_" + par] = [lowlim, upplim]
-                else:
-                    parampriors[par] = defaultpriors[par]
-            elif par == "ffac":
-                if fitLogfSpotFac[1]:
-                    lowlim = hyperp_logpriors[0]
-                    upplim = hyperp_logpriors[1]
-                    parampriors["log_" + par] = [lowlim, upplim]
-                else:
-                    parampriors[par] = defaultpriors[par]
+            # optionally log-prior for fspot/ffac
+            if par == "fspot" and fitLogfSpotFac[0]:
+                parampriors["log_fspot"] = [hyperp_logpriors[0], hyperp_logpriors[1]]
+            elif par == "ffac" and fitLogfSpotFac[1]:
+                parampriors["log_ffac"] = [hyperp_logpriors[0], hyperp_logpriors[1]]
             else:
                 parampriors[par] = defaultpriors[par]
 
-    for par in param:
-        if par in gaussparanames:
-            ind_gaussparam = np.where(gaussparanames == par)[0][0]
-            mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
-            std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
-            new_prior = [np.max([mean_gaussparam - 5. * std_gaussparam, parampriors[par][0]]),
-                         np.min([mean_gaussparam + 5. * std_gaussparam, parampriors[par][1]])]
-            parampriors[par] = new_prior
+    # Gaussian priors where applicable
+    if gaussparanames is not None:
+        gaussparanames = np.array(gaussparanames)
+        for par in p:
+            if par in gaussparanames:
+                idx = np.where(gaussparanames == par)[0][0]
+                mean, std = hyperp_gausspriors[idx]
+                lo, hi = parampriors[par]
+                parampriors[par] = [max(mean - 5*std, lo), min(mean + 5*std, hi)]
 
     return parampriors
 
-
-def parse_range_string(s, as_type=float):
+def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
+                         fitLogfSpotFac=[False, False], hyperp_logpriors=[],
+                         T_grid=[2300., 10000.], logg_grid=[2.5, 5.5],
+                         Dscale_guess=7000.):
     """
-    Convert a string representing two numeric values into a list.
+    Get parameter priors for the stellar retrieval.
+
+    Parameters
+    ----------
+    param : dict
+        Dictionary of default parameter values.
+    gaussparanames : list of str
+        List of parameter names that have Gaussian priors.
+    hyperp_gausspriors : list of lists, optional
+        List of [mean, std] for each Gaussian prior parameter.
+    fitLogfSpotFac : list of bool, optional
+        List of two booleans indicating if fspot and ffac are fitted in log space.
+    hyperp_logpriors : list of lists, optional
+        List of [min, max] for log priors on heterogeneity fractions.
+    T_grid : list of float, optional
+        Temperature grid for the stellar models. Default is [2300., 10000.].
+    logg_grid : list of float, optional
+        Log g grid for the stellar models. Default is [2.5, 5.5].
+    Dscale_guess : float, optional
+        Initial guess for the Dscale parameter (for TLS retrieval). Default is 7000.
+
+    Returns
+    -------
+    dict
+        Dictionary of parameter priors in the form of [low, high] for uniform priors.
+
+    """
+    return get_param_priors_master(
+        param, gaussparanames, hyperp_gausspriors,
+        fitLogfSpotFac, hyperp_logpriors,
+        T_grid, logg_grid,
+        mode="depth", Dscale_guess=Dscale_guess
+    )
+
+def parse_range_string(s, as_type=float, sep=None, allow_single=False):
+    """
+    Convert a string representing numbers into a list of typed values.
 
     Parameters
     ----------
     s : str
-        A string with two numeric values separated by an underscore (e.g., "1.4_5.4").
+        Typical forms: "1.4_5.4", "1.4 5.4", "1.4,5.4".
     as_type : type, optional
-        The type to cast the values to, either `float` (default) or `int`.
+        Type to cast each token to (float or int). Default: float.
+    sep : str or None, optional
+        Explicit separator. If None, tries '_', then ',', then whitespace.
+    allow_single : bool, optional
+        If True, returns a one-element list if only one number is present.
+        Otherwise, requires at least two numbers.
 
     Returns
     -------
     list
-        A list containing the two values, cast to the specified type.
+        List of numbers cast to `as_type`.
 
+    Raises
+    ------
+    ValueError
+        If input is empty, not a string, or cannot be parsed into the
+        required number of values.
     """
-    return [as_type(x) for x in s.split('_')]
+    if s is None:
+        raise ValueError("parse_range_string: input is None")
+
+    if isinstance(s, (list, tuple, np.ndarray)):
+        # Already a sequence: just cast and return
+        try:
+            return [as_type(x) for x in s]
+        except Exception as e:
+            raise ValueError(f"parse_range_string: cannot cast sequence {s!r} to {as_type}: {e}")
+
+    if not isinstance(s, str):
+        raise ValueError(f"parse_range_string: expected str, got {type(s).__name__}")
+
+    s = s.strip()
+    if s == "":
+        raise ValueError("parse_range_string: empty string")
+
+    # Choose a separator
+    if sep is not None:
+        tokens = [t for t in s.split(sep) if t != ""]
+    else:
+        if "_" in s:
+            tokens = s.split("_")
+        elif "," in s:
+            tokens = s.split(",")
+        else:
+            tokens = s.split()  # whitespace
+
+    try:
+        vals = [as_type(t) for t in tokens]
+    except Exception as e:
+        raise ValueError(f"parse_range_string: cannot parse {s!r} as {as_type}: {e}")
+
+    if not allow_single and len(vals) < 2:
+        raise ValueError(f"parse_range_string: expected at least two values, got {len(vals)} from {s!r}")
+
+    return vals
+
 
 ##  --- Loading models #
 
@@ -655,7 +813,7 @@ def get_stellar_model_grid(input_para, preprocessed=False):
         logg_range = parse_range_string(input_para["logg_range"])
 
         if input_para["Teff_range"] == "default":
-            Teff_range = [np.min([2300. - input_para["Teffstar"], -100.]) + input_para["Teffstar"],
+            Teff_range = [np.max([input_para["Teffstar"]-1000., 2300.]),
                           input_para["Teffstar"] + 1000.]
         else:
             Teff_range = parse_range_string(input_para["Teff_range"])
@@ -1207,7 +1365,7 @@ def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors,
 
 def integ_model(lam_min, lam_max, wave, F):
     """
-    Integrate model in wavelength range
+    Integrate model in wavelength range (bin-averaged)
 
     Parameters
     ----------
@@ -1231,28 +1389,68 @@ def integ_model(lam_min, lam_max, wave, F):
     #        F_int.append(np.trapz(F[ind],x=wave[ind]))
     return np.array(F_int)
 
+def combine_components(mode, base, fspot, ffac, Fphot, Fspot, Ffac, *,
+                       allow_excess=False, eps=1e-12):
+    """
+    Combine photosphere, spot, and facula components in either flux or depth space.
+
+    Parameters
+    ----------
+    mode : {"flux","depth"}
+        - "flux": return scaled flux model:
+            base * [(1 - fspot - ffac) * Fphot + fspot * Fspot + ffac * Ffac]
+        - "depth": return contaminated transit depth:
+            base * 1 / (1 - fspot*(1 - Fspot/Fphot) - ffac*(1 - Ffac/Fphot))
+            (Rackham+2018)
+    base : float
+        Scaling value:
+        - flux mode: Fscale
+        - depth mode: Dlam (bare/true transit depth)
+    fspot, ffac : float
+        Covering fractions in [0,1). If fspot+ffac >= 1 and allow_excess=False,
+        raises ValueError.
+    Fphot, Fspot, Ffac : array_like
+        Component flux arrays on the same wavelength grid (for "flux") or
+        arrays already integrated to the observed bins (for "depth").
+    allow_excess : bool, optional
+        If True, skip the fspot+ffac < 1 check.
+    eps : float, optional
+        Small number to avoid division-by-zero when normalizing by Fphot.
+
+    Returns
+    -------
+    ndarray
+        Combined model (flux or contaminated depth), shape broadcast with inputs.
+    """
+    if (not allow_excess) and (fspot + ffac >= 1.0):
+        raise ValueError(f"fspot+ffac must be < 1 (got {fspot+ffac:.3f}).")
+
+    if mode == "flux":
+        phot = (1.0 - fspot - ffac) * Fphot
+        if fspot > 0:
+            phot = phot + fspot * Fspot
+        if ffac > 0:
+            phot = phot + ffac * Ffac
+        return base * phot
+
+    elif mode == "depth":
+        # epsilon(lambda) = 1 / (1 - fspot*(1 - S/F) - ffac*(1 - Q/F))
+        Fphot_safe = np.asarray(Fphot) + eps
+        spot_term = fspot * (1.0 - (np.asarray(Fspot) / Fphot_safe))
+        fac_term  = ffac  * (1.0 - (np.asarray(Ffac)  / Fphot_safe))
+        epsilon = 1.0 / (1.0 - spot_term - fac_term)
+        return base * epsilon
+
+    else:
+        raise ValueError("mode must be 'flux' or 'depth'")
+
 
 def Dlam_obs(Dlam, fspot, ffac, Fphot_int, Fspot_int, Ffac_int):
     """
     model for observed transit depth (Rackham+2018)
-
-    Parameters
-    ----------
-    Dlam: bare-rock transit depth
-    fspot: spot covering fraction
-    ffac: facula covering fraction
-    Fphot_int: photosphere flux (int. in each bin)
-    Fspot_int: spot flux (int. in each bin)
-    Ffac_int: faculae flux (int. in each bin)
-
-    Returns
-    -------
-    contaminated transit depth
+    wrapper around combine_components(..., mode='depth').
     """
-    spot = fspot * (1. - (Fspot_int / Fphot_int))
-    fac = ffac * (1. - (Ffac_int / Fphot_int))
-    epsilon = 1. / (1. - spot - fac)
-    return Dlam * epsilon
+    return combine_components("depth", Dlam, fspot, ffac, Fphot_int, Fspot_int, Ffac_int)
 
 
 def calc_stctm_model_and_integrate(Dlam, fspot, ffac, spec, model_wv, model_phot_fixR, model_spot_fixR, model_fac_fixR):
@@ -1289,7 +1487,29 @@ def calc_stctm_model_and_integrate(Dlam, fspot, ffac, spec, model_wv, model_phot
     return Dlam * epsilon_int, Dlam * epsilon
 
 
-def get_closest_models_from_grid(param, grid_models_fixedresP, T_grid, logg_grid):
+def _pget(d, *alts):
+    """
+    This function allows for compatibility of get_closest_models_from_grid() with both
+    TLS retrievals and exotune retrievals.
+
+    Parameters
+    ----------
+    d : dict
+        dictionary of default param values.
+    alts : str
+        alternative keys to look for in the dictionary.
+
+    Returns
+    -------
+    First present key from alts; raise if none.
+    """
+
+    for k in alts:
+        if k in d:
+            return d[k]
+    raise KeyError(f"None of the keys {alts} found in param dict.")
+
+def get_closest_models_from_grid(param, models_grid_fixedR, T_grid, logg_grid):
     """
     Given the parameter values, get the closest stellar model in terms of Teff, logg
 
@@ -1308,17 +1528,24 @@ def get_closest_models_from_grid(param, grid_models_fixedresP, T_grid, logg_grid
     -------
     tuple containing photosphere, spot, and faculae model flux
     """
-    ind_Tspot = np.argmin(np.abs(T_grid - param["Tspot"]))
-    ind_Tfac = np.argmin(np.abs(T_grid - param["Tfac"]))
-    ind_Tphot = np.argmin(np.abs(T_grid - param["Tphot"]))
-    ind_logg_phot = np.argmin(np.abs(logg_grid - param["logg_phot"]))
-    ind_logg_het = np.argmin(np.abs(logg_grid - param["logg_het"]))
+    Tphot = _pget(param, "Tphot")
+    Tspot = _pget(param, "Tspot")
+    Tfac  = _pget(param, "Tfac")
 
-    model_spot = grid_models_fixedresP[ind_Tspot, ind_logg_het]
-    model_phot = grid_models_fixedresP[ind_Tphot, ind_logg_phot]
-    model_fac = grid_models_fixedresP[ind_Tfac, ind_logg_het]
-    fl_phot_spot_fac = (model_phot, model_spot, model_fac)
-    return fl_phot_spot_fac
+    logg_phot = _pget(param, "logg_phot", "loggphot")
+    logg_het  = _pget(param, "logg_het",  "logghet")
+
+    i_Tphot = int(np.argmin(np.abs(T_grid   - Tphot)))
+    i_Tspot = int(np.argmin(np.abs(T_grid   - Tspot)))
+    i_Tfac  = int(np.argmin(np.abs(T_grid   - Tfac)))
+    i_gphot = int(np.argmin(np.abs(logg_grid - logg_phot)))
+    i_ghet  = int(np.argmin(np.abs(logg_grid - logg_het)))
+
+    model_phot = models_grid_fixedR[i_Tphot, i_gphot]
+    model_spot = models_grid_fixedR[i_Tspot, i_ghet]
+    model_fac  = models_grid_fixedR[i_Tfac,  i_ghet]
+
+    return model_phot, model_spot, model_fac
 
 ##  --- Post-processing stats #
 
@@ -1390,167 +1617,216 @@ def BIC(chi2, nDataPoints, nPara):
 ##  --- Saving #
 
 
-def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir):
+def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir,
+                   names=None, verbose=True, preserve_meta=True):
     """
-    Save reference files used in a run to the results directory for reproducibility.
-
-    This function copies the main script, the INI configuration file, and a utility
-    script into a specified results directory, renaming them with standard names.
+    Copy the main run script, INI file, and a utilities script into `res_dir`.
 
     Parameters
     ----------
     this_dir : str
-        Path to the directory where the current scripts and INI file are located.
-
+        Directory where the source files live (may be '' if paths are absolute).
     this_script : str
         Filename of the main run script (e.g., 'stellar_retrieval_runfile.py').
-
     iniFile : str
-        Filename of the INI configuration file used for the run.
-
+        Filename of the INI file.
     utils_script : str
-        Path to the utility script used by the main script (e.g., 'stellar_retrieval_utilities.py').
-
+        Filename or path to the utilities script.
     res_dir : str
-        Path to the directory where the reference copies will be saved.
-
-    Returns
-    -------
-    None
+        Destination directory (created if missing).
+    names : dict or None
+        Optional mapping for target filenames:
+        {
+          "script_name": "stellar_retrieval_runfile_thisrun.py",
+          "utils_script_name": "stellar_retrieval_utilities_thisrun.py",
+          "ini_name": "iniFile_thisrun.py"
+        }
+        If None, SRU-style defaults are used.
+    verbose : bool
+        Print what’s happening.
+    preserve_meta : bool
+        Use shutil.copy2 (preserve metadata) if True, else shutil.copy.
     """
-    # ** Get .py files used to run this case and save to results directory
-    script_name = "stellar_retrieval_runfile_thisrun.py"
-    utils_script_name = "stellar_retrieval_utilities_thisrun.py"
-    iniFile_name = "iniFile_thisrun.py"
+    # Defaults (SRU style)
+    defaults = dict(
+        script_name="stellar_retrieval_runfile_thisrun.py",
+        utils_script_name="stellar_retrieval_utilities_thisrun.py",
+        ini_name="iniFile_thisrun.py",
+    )
+    if names:
+        defaults.update(names)
+    copier = shutil.copy2 if preserve_meta else shutil.copy
 
-    print("\nSaving files...")
-    print("\n--Run-analysis file...")
-    print("\n**This file:", this_dir + this_script)
-    print("Saved to file:", res_dir + script_name)
-    shutil.copy(this_dir + this_script, res_dir + script_name)
-    print("... Done.**")
+    # Normalize paths
+    os.makedirs(res_dir, exist_ok=True)
+    src_script = this_script if os.path.isabs(this_script) else os.path.join(this_dir, this_script)
+    src_ini    = iniFile   if os.path.isabs(iniFile)    else os.path.join(this_dir, iniFile)
+    src_utils  = utils_script if os.path.isabs(utils_script) else os.path.join(this_dir, utils_script)
 
-    print("\n--INI file...")
-    print("\n**This file:", this_dir + iniFile)
-    print("Saved to file:", res_dir + iniFile_name)
-    shutil.copy(this_dir + iniFile, res_dir + iniFile_name)
-    print("... Done.**")
+    dst_script = os.path.join(res_dir, defaults["script_name"])
+    dst_ini    = os.path.join(res_dir, defaults["ini_name"])
+    dst_utils  = os.path.join(res_dir, defaults["utils_script_name"])
 
-    print("\n--Utilities file...")
+    if verbose:
+        print("\nSaving files...")
+        print("-- Run-analysis file")
+        print("  **Source:", src_script)
+        print("  ->", dst_script)
+    copier(src_script, dst_script)
 
-    print("\n**This file:", utils_script)
-    print("Saved to file:", res_dir + utils_script_name)
+    if verbose:
+        print("\n-- INI file")
+        print("  **Source:", src_ini)
+        print("  ->", dst_ini)
+    copier(src_ini, dst_ini)
 
-    shutil.copy(utils_script, res_dir + utils_script_name)
-    print("... Done.**")
+    if verbose:
+        print("\n-- Utilities file")
+        print("  **Source:", src_utils)
+        print("  ->", dst_utils)
+    copier(src_utils, dst_utils)
+
+    if verbose:
+        print("... Done.**")
+
+    return dict(script=dst_script, ini=dst_ini, utils=dst_utils)
 
 
-def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparanames, save_fit):
+
+def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim,
+                        fitparanames, save_fit, prefix="stctm"):
     """
-    Save the MCMC results to a pandas dataframe and an astropy table
+    Save the MCMC results to Pandas DataFrame, Astropy Table, and CSVs.
 
     Parameters
     ----------
-    results_folder: str
-        folder to save the results
-    runname: str
-        identifier of the run
-    sampler: emcee.EnsembleSampler object
-        sampler object
-    burnin: int
-        number of burn-in steps
-    ndim: int
-        number of dimensions
-    fitparanames: list of str
-        list of the fitted parameters
-    save_fit: bool
-        True to save the results
-
+    results_folder : str
+        Path to the directory where output files should be saved.
+    runname : str
+        Identifier for this run.
+    sampler : emcee.EnsembleSampler
+        The MCMC sampler containing the chains and log-probabilities.
+    burnin : int
+        Number of steps per walker to discard as burn-in.
+    ndim : int
+        Number of fitted parameters.
+    fitparanames : list of str
+        Names of the fitted parameters.
+    save_fit : bool
+        If True, write CSV files for the samples and best-fit parameters.
+    prefix : str, optional
+        Prefix to use in output filenames ("stctm" or "exotune").
 
     Returns
     -------
-    bestfit: pandas dataframe
-        dataframe containing the best fit parameters
-    ind_bestfit: int
-        index of the best fit
-    ind_maxprob: int
-        index of the maximum probability
-    parabestfit: numpy 1d array
-        best fit parameters
-    samples: pandas dataframe
-        dataframe containing the samples
-    t_res: astropy table
-        table containing a summary of the results
+    bestfit : pandas.DataFrame
+        DataFrame containing best-fit parameter values (including MaxLike).
+    ind_bestfit : int
+        Index of the median/quantile-based best fit sample.
+    ind_maxprob : int
+        Index of the maximum-likelihood sample.
+    parabestfit : ndarray
+        Parameter values corresponding to the MaxLike sample.
+    samples : pandas.DataFrame
+        Flattened MCMC samples after burn-in.
+    t_res : astropy.table.Table
+        Astropy table representation of the samples.
     """
-    samples = pd.DataFrame(sampler.chain[:, burnin:, :].reshape((-1, ndim)),
-                           columns=[x for x in fitparanames])
-    lnprobability = pd.Series(sampler.lnprobability[:, burnin:].reshape(-1),
-                              name='lnprobability')
-    lnlikesave = pd.Series(sampler.lnprobability[:, burnin:].reshape(-1),
-                           name='lnlike')
+    # flatten samples across walkers and steps
+    samples = pd.DataFrame(
+        sampler.chain[:, burnin:, :].reshape((-1, ndim)),
+        columns=fitparanames
+    )
+    lnprobability = pd.Series(
+        sampler.lnprobability[:, burnin:].reshape(-1),
+        name="lnprobability"
+    )
+    lnlikesave = pd.Series(
+        sampler.lnprobability[:, burnin:].reshape(-1),
+        name="lnlike"
+    )
+
     panda = pd.concat([lnprobability, lnlikesave, samples], axis=1)
     t_res = table.Table.from_pandas(panda)
-    if save_fit:
-        aio.ascii.write(t_res, results_folder + "stctm_pandas_" + runname + '.csv', format='csv', overwrite=True)
 
-    # save best fit parameters and quantiles
+    if save_fit:
+        aio.ascii.write(
+            t_res,
+            f"{results_folder}{prefix}_pandas_{runname}.csv",
+            format="csv", overwrite=True
+        )
+
+    # derive best fit
     bestfit, ind_bestfit, ind_maxprob = samp2bestfit(panda)
-    # print(bestfit)
     if save_fit:
-        bestfit.to_csv(results_folder + 'stctm_bestfit_' + runname + '.csv')
+        bestfit.to_csv(f"{results_folder}{prefix}_bestfit_{runname}.csv")
 
-    # make corner plot
     print("\nMax Likelihood:\n")
     print(bestfit["MaxLike"])
     print("\n")
 
     parabestfit = np.array(bestfit["MaxLike"][2:])
+
     return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
 
 
-def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models, results_folder, runname, save_fit=True):
+
+def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_models,
+                       results_folder, runname, prefix="stctm", save_fit=True):
     """
-    Save the best fit statistics to a csv file
+    Compute and save summary statistics (chi2, red-chi2, BIC) for the best-fit model.
 
     Parameters
     ----------
-    spec: TransSpec object
-        (planet atmosphere observations in transmission)
-    ind_bestfit: int
-        index of the best fit
-    fitparanames: list of str
-        list of the fitted parameters
-    flat_st_ctm_models: list of arrays
-        list of the models
-    results_folder: str
-        folder to save the results
-    runname: str
-        identifier of the run
-    save_fit: bool
-        True to save the results
+    spec : dict-like or object
+        Observed spectrum. Must provide observed values and uncertainties as
+        either keys ("yval", "yerrLow") or attributes (yval, yerrLow).
+    ind_bestfit : int
+        Index of the best-fit model.
+    fitparanames : list of str
+        Names of the fit parameters (used for degrees of freedom).
+    flat_models : ndarray
+        Array of model spectra (post-burn-in).
+    results_folder : str
+        Path to save the output.
+    runname : str
+        Identifier for this run.
+    prefix : str, default="stctm"
+        Filename prefix to distinguish different pipelines ("stctm", "exotune").
+    save_fit : bool, default=True
+        If True, writes results to CSV.
 
     Returns
     -------
-    None
-
+    astropy.table.Table
+        Table with chi2, redchi2, BIC, etc.
     """
-    # create a dictionary that collates all the best-fit information
+
+    yval = _get(spec, "yval")
+    yerr = _get(spec, "yerrLow")
+
     print("\nSaving stats on the best fit...")
     bestfit_stats = dict()
-    best_model = flat_st_ctm_models[ind_bestfit]
+    best_model = flat_models[ind_bestfit]
     nPara = len(fitparanames)
-    nDataPoints = len(spec["yval"])
+    nDataPoints = len(yval)
     n_dof = nDataPoints - nPara
     bestfit_stats["ind_postburnin"] = ind_bestfit
-    bestfit_stats["chi2"] = np.sum((spec['yval'] - best_model) ** 2. / spec["yerrLow"] ** 2.)
+    bestfit_stats["chi2"] = np.sum((yval - best_model) ** 2. / yerr ** 2.)
     bestfit_stats["redchi2"] = bestfit_stats["chi2"] / n_dof
     bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"], nDataPoints, nPara)
     t_bestfit_stats = table.Table([bestfit_stats])
 
     if save_fit:
-        print("\nWriting to file...")
-        aio.ascii.write(t_bestfit_stats, results_folder + "stctm_bestfit_stats_" + runname + '.csv', format='csv',
-                        overwrite=True)
+        print("Writing to file...")
+        aio.ascii.write(
+            t_bestfit_stats,
+            f"{results_folder}{prefix}_bestfit_stats_{runname}.csv",
+            format="csv", overwrite=True
+        )
+
+    return t_bestfit_stats
+
 
 
 ##  --- Plotting #
@@ -1689,6 +1965,136 @@ def xspeclog(ax, xlim=None, level=1, fmt="%2.1f"):
         ax.set_xlim(xlim)
 
 
+
+
+
+def _get(obj, key, default=None):
+    """Dict-or-attr getter used across SRU functions."""
+    if isinstance(obj, dict) + isinstance(obj, ptspec.TransSpec):
+        return obj[key]
+    else:
+        return getattr(obj, key)
+
+def plot_blobs_spectrum(
+    spec,
+    model_blobs,
+    ind_bestfit,
+    *,
+    ax=None,
+    kind="stctm",                # "stctm" (depth) or "exotune" (flux); only affects CSV label/prefix if desired
+    bestfit_color="k",
+    color="b",
+    plot3sig=True,
+    plot2sig=True,
+    plot1sig=True,
+    plotmedian=True,
+    plotbestfit=True,
+    legend_loc=1,
+    save_csv=False,
+    results_folder="",
+    runname="",
+    percentiles=(0.2, 2.3, 15.9, 50.0, 84.1, 97.7, 99.8),
+):
+    """
+    Plot spectra obtained from the retrieval with uncertainty from blobs.
+
+    Parameters
+    ----------
+    spec : TransSpec-like or StellSpec-like object
+        Must support .plot(ax=...) and expose wavelength as either spec['wave'] or spec.wave.
+    model_blobs : array-like
+        array of model outputs sampled from the posterior distribution.
+    ind_bestfit : int
+        Index of the max-like model in `stctm_models_blobs`
+    ax : matplotlib.axes.Axes, optional
+        Matplotlib axis object to plot on. If None, a new axis is created.
+    bestfit_color : str, default 'k'
+        Color used to plot the best-fit model.
+    color : str, default 'b'
+        Color used for median, 1, 2, 3 sigma contours.
+    plot3sig : bool, default True
+        If True, plot the 3-sigma uncertainty region.
+    plot2sig : bool, default True
+        If True, plot the 2-sigma uncertainty region.
+    plot1sig : bool, default True
+        If True, plot the 1-sigma uncertainty region.
+    plotmedian : bool, default True
+        If True, plot the median model prediction.
+    plotbestfit : bool, default True
+        If True, plot the best-fit model.
+    legend_loc : int, default 1
+        Location of the legend in the plot (uses matplotlib legend location codes).
+    save_csv : bool, default False
+        If True, save a CSV file with the quantiles and best-fit predictions.
+    results_folder : str, optional
+        Directory path where the CSV file should be saved (if `save_csv=True`).
+    runname : str, optional
+        Base name used for the saved CSV file (if `save_csv=True`).
+
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axis object with the plot drawn on it.
+
+    """
+    wave = _get(spec,"wave")
+
+    # Determine whether ybands are samples or precomputed percentiles
+    ybands = np.asarray(model_blobs)
+    if ybands.ndim != 2:
+        raise ValueError("ybands must be 2D: (nsamples or npercentiles, n_wave).")
+
+    if ybands.shape[0] == len(percentiles):
+        # Treat as precomputed percentiles
+        pct = ybands
+        best = None if ind_bestfit is None else ybands[ind_bestfit]  # not typical if already percentiles
+    else:
+        # Compute percentiles from samples axis
+        pct = np.nanpercentile(ybands, percentiles, axis=0)
+        best = None if ind_bestfit is None else ybands[ind_bestfit, :]
+
+    # Plot base spectrum (spec knows how to draw itself)
+    if ax is None:
+        fig, ax = spec.plot()
+    else:
+        fig = None
+        spec.plot(ax=ax)
+
+    # Shade bands
+    if plot1sig:
+        ax.fill_between(wave, pct[2], pct[4], color=color, alpha=0.5, zorder=-9, label=r'1$\sigma$')
+    if plot2sig:
+        ax.fill_between(wave, pct[1], pct[5], color=color, alpha=0.3, zorder=-10, label=r'2$\sigma$')
+    if plot3sig:
+        ax.fill_between(wave, pct[0], pct[6], color=color, alpha=0.2, zorder=-10, label=r'3$\sigma$')
+
+    # Median and best-fit lines
+    if plotmedian:
+        ax.plot(wave, pct[3], color=color, zorder=-8, label='Median')
+    if plotbestfit and best is not None:
+        ax.plot(wave, best, color=bestfit_color, zorder=-8, label='Max. likelihood')
+
+    ax.legend(loc=legend_loc)
+
+    if save_csv:
+        dct = dict()
+        dct["wave"] = deepcopy(wave)
+        if best is not None:
+            dct["bestfit"] = best
+        dct["median"]   = pct[3]
+        dct["+1 sigma"] = pct[4]
+        dct["-1 sigma"] = pct[2]
+        dct["+2 sigma"] = pct[5]
+        dct["-2 sigma"] = pct[1]
+        dct["+3 sigma"] = pct[6]
+        dct["-3 sigma"] = pct[0]
+
+        t = table.Table(data=dct)
+        # keep the same filename pattern the old utilities wrote
+        t.write(results_folder + "blobs_1_2_3_sigma" + runname + ".csv", overwrite=True)
+
+    return fig, ax
+
 def plot_stctm_blobs(spec, stctm_models_blobs,
                      ind_bestfit, ax=None,
                      bestfit_color='k', color="b",
@@ -1733,61 +2139,29 @@ def plot_stctm_blobs(spec, stctm_models_blobs,
 
     Returns
     -------
+    fig : matplotlib.figure.Figure
     ax : matplotlib.axes.Axes
         The axis object with the plot drawn on it.
 
     """
 
-    # percentiles = [2.5, 16., 50., 84., 97.5]
-    percentiles = [0.2, 2.3, 15.9, 50., 84.1, 97.7, 99.8]
-
-    # for each epoch of each planet, get the median, 1 and 2sigma pred time
-    stctm_percentiles = np.nanpercentile(stctm_models_blobs, percentiles, axis=0)
-
-    # calc for best fit (need ind_bestfit)
-    stctm_best = stctm_models_blobs[ind_bestfit, :]
-    if ax is None:
-        fig, ax = spec.plot()
-    else:
-        fig = None
-        spec.plot(ax=ax)
-
-    if plot1sig:
-        ax.fill_between(spec["wave"], stctm_percentiles[2], stctm_percentiles[4], color=color, alpha=0.5, zorder=-9,
-                        label=r'1$\sigma$')
-
-    if plot2sig:
-        ax.fill_between(spec["wave"], stctm_percentiles[1], stctm_percentiles[5], color=color, alpha=0.3, zorder=-10,
-                        label=r'2$\sigma$')
-
-    if plot3sig:
-        ax.fill_between(spec["wave"], stctm_percentiles[0], stctm_percentiles[6], color=color, alpha=0.2, zorder=-10,
-                        label=r'3$\sigma$')
-
-    if plotmedian:
-        ax.plot(spec["wave"], stctm_percentiles[3], color=color, zorder=-8, label=r'Median')
-
-    if plotbestfit:
-        ax.plot(spec["wave"], stctm_best, color=bestfit_color, zorder=-8, label=r'Max. likelihood')
-
-    ax.legend(loc=legend_loc)
-
-    if save_csv:
-        dct = dict()
-        dct["wave"] = deepcopy(np.array(spec["wave"]))
-        dct["bestfit"] = stctm_best
-        dct["median"] = stctm_percentiles[3]
-        dct["+1 sigma"] = stctm_percentiles[4]
-        dct["-1 sigma"] = stctm_percentiles[2]
-        dct["+2 sigma"] = stctm_percentiles[5]
-        dct["-2 sigma"] = stctm_percentiles[1]
-        dct["+3 sigma"] = stctm_percentiles[6]
-        dct["-3 sigma"] = stctm_percentiles[0]
-
-        t = table.Table(data=dct)
-        t.write(results_folder + "blobs_1_2_3_sigma" + runname + ".csv", overwrite=True)
-    return fig, ax
-
+    return plot_blobs_spectrum(
+        spec,
+        stctm_models_blobs,
+        ind_bestfit,
+        ax=ax,
+        kind="stctm",
+        bestfit_color=bestfit_color,
+        color=color,
+        plot3sig=plot3sig,
+        plot2sig=plot2sig,
+        plot1sig=plot1sig,
+        plotmedian=plotmedian,
+        plotbestfit=plotbestfit,
+        legend_loc=legend_loc,
+        save_csv=save_csv,
+        results_folder=results_folder,
+        runname=runname)
 
 def plot_stctm_samples_res(spec, param, fitparanames,
                            ind_bestfit, post_burnin_samples, T_grid, logg_grid,
@@ -1992,6 +2366,27 @@ def plot_stctm_samples_res(spec, param, fitparanames,
 
     # return fig, ax, sample_spectra
 
+def get_percentile_blobs(arr, percentiles=(0.2, 2.3, 15.9, 50.0, 84.1, 97.7, 99.8), axis=0):
+    """
+    Compute percentile envelopes along a samples axis.
+
+    Parameters
+    ----------
+    arr : ndarray
+        Array of model outputs with the samples dimension along `axis`.
+    percentiles : sequence of float, optional
+        Percentiles (0–100) to compute. Defaults to ~±1/2/3σ plus median for a Gaussian.
+    axis : int, optional
+        Axis corresponding to samples (default 0).
+
+    Returns
+    -------
+    ndarray
+        Percentile slices with shape:
+        (len(percentiles), ...) where the samples axis is reduced.
+    """
+    return np.nanpercentile(arr, percentiles, axis=axis)
+
 
 def get_stctm_blobs(stctm_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 97.7, 99.8]):
     """
@@ -2007,8 +2402,7 @@ def get_stctm_blobs(stctm_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 97.7,
     spectrum corresponding to each percentile
     """
 
-    stctm_percentiles = np.nanpercentile(stctm_models_blobs, percentiles, axis=0)
-    return stctm_percentiles
+    return get_percentile_blobs(stctm_models_blobs, percentiles=percentiles)
 
 
 def get_stctm_amplitude(spec, stctm_percentiles):
@@ -2089,6 +2483,79 @@ def plot_stctm_amplitude(spec, stctm_models_blobs,
 
 # corner plot function
 
+def plot_corner_master(
+    samples,
+    *,
+    labels=None,
+    color="coral",
+    plot_datapoints=False,
+    smooth=1.0,
+    quantiles=(0.16, 0.5, 0.84),
+    title_kwargs=None,
+    hist_kwargs=None,
+    rg=None,
+    show_titles=True,
+    levels=(0.393, 0.865, 0.989),
+    truths=None,
+    truth_color="k",
+    **kwargs
+):
+    """
+    One master for both TLS and exotune retrieval corner plots.
+
+    Parameters largely mirror `corner.corner`.
+    - `samples` can be a numpy array or a pandas DataFrame.
+    - `labels`: if None and `samples` is a DataFrame, uses DataFrame columns.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+    # Accept pandas DataFrame or ndarray
+    try:
+        import pandas as _pd  # local import to avoid hard dep
+        if isinstance(samples, _pd.DataFrame):
+            if labels is None:
+                labels = list(samples.columns)
+            samples = samples.to_numpy()
+    except Exception:
+        pass
+
+    # Labels sanity
+    if labels is None:
+        raise ValueError("plot_corner_master: `labels` must be provided or use a DataFrame with column names.")
+    if len(labels) != (samples.shape[1] if samples.ndim == 2 else samples.shape[-1]):
+        raise ValueError("plot_corner_master: `labels` length must match number of columns in samples.")
+
+    # Defaults
+    if title_kwargs is None:
+        title_kwargs = {"fontsize": 12}
+    if hist_kwargs is None:
+        hist_kwargs = {"linewidth": 3}
+    # enforce color into hist_kwargs
+    hist_kwargs = dict(hist_kwargs)
+    hist_kwargs["color"] = color
+
+    # Call corner
+    fig = corner.corner(
+        samples,
+        labels=labels,
+        plot_datapoints=plot_datapoints,
+        smooth=smooth,
+        show_titles=show_titles,
+        quantiles=quantiles,
+        title_kwargs=title_kwargs,
+        color=color,
+        hist_kwargs=hist_kwargs,
+        range=rg,
+        levels=levels,
+        truths=truths,
+        truth_color=truth_color,
+        **kwargs,
+    )
+    return fig
+
+
 def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
                 quantiles=[0.16, 0.5, 0.84], title_kwargs={'fontsize': 12},
                 hist_kwargs={"linewidth": 3}, rg=None,
@@ -2108,19 +2575,20 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.,
     -------
     figure with the corner plot
     """
-    hist_kwargs["color"] = plotparams["hist_color"]
-    color = plotparams["hist_color"]
-    try:
-        fig = corner.corner(samples, labels=plotparams["labels"],
-                            plot_datapoints=plot_datapoints, smooth=smooth,
-                            show_titles=show_titles, quantiles=quantiles,
-                            title_kwargs=title_kwargs, color=color,
-                            hist_kwargs=hist_kwargs, range=rg,
-                            levels=levels, **kwargs)
-    except:
-        print("Error in corner plot!")
-        pdb.set_trace()
-    return fig
+    return plot_corner_master(
+        samples,
+        labels=plotparams["labels"],
+        color=plotparams["hist_color"],
+        plot_datapoints=plot_datapoints,
+        smooth=smooth,
+        quantiles=quantiles,
+        title_kwargs=title_kwargs,
+        hist_kwargs=hist_kwargs,
+        rg=rg,
+        show_titles=show_titles,
+        levels=levels,
+        **kwargs
+    )
 
 
 def plot_custom_corner(samples, fitparanames, parabestfit):
@@ -2168,36 +2636,194 @@ def plot_custom_corner(samples, fitparanames, parabestfit):
     return fig
 
 
-def format_param_str(param, fitparanames):
+
+
+def format_param_str(
+        param,
+        fitparanames=None,
+        *,
+        mode=None,  # "flux" (ExoTUNE) | "depth" (TLS STCTM) | None (auto)
+        include_fit_list=False,  # prepend a line listing the fitted param names
+        wrap_at=None  # e.g. 50 -> wrap long "Fitted params" line
+):
     """
-    Format the fitted parameters into a string for printing
+    Format a compact, human-readable summary of stellar and fitted parameters.
+
+    Works for both TLS retrieval (depth mode) and ExoTUNE (flux mode). If `mode` is
+    not provided, it is inferred from the available keys in `param`.
 
     Parameters
     ----------
     param : dict
-        dictionary of default param values.
-    fitparanames : list of str
-        list of the fitted parameters.
+        Dictionary of default/fitted parameter values.
+    fitparanames : list[str] or None
+        Names of the parameters varied in the fit (optional, used only if
+        include_fit_list=True).
+    mode : {"flux","depth",None}, optional
+        "flux" for ExoTUNE (may include Fscale/errInfl), "depth" for TLS (may include Dscale).
+        If None, inferred from keys present in `param`.
+    include_fit_list : bool
+        If True, include a first line "Fitted params: [...]".
+    wrap_at : int or None
+        If set, wraps the "Fitted params" line at ~wrap_at characters.
 
     Returns
     -------
-    str1: str
-        String to be printed
+    str
+        A multi-line summary string.
     """
-    param = get_derived_param(param)
+    # Expand any derived values (Fscale from logFscale, errInfl from logErrInfl, temps, etc.)
+    p = get_derived_param(param)
+    # Normalize key naming across TLS/exotune retrievals
+    p = _norm_keys(p)
 
-    # str1 = "Fitted params: "+str(fitparanames)+"\n"
-    str1 = "\n"
-    str1 = str1 + "Stellar params: Tphot=" + str(int(param["Tphot"] * 10.) / 10.) + " met=" + str(param["met"]) + "\n"
-    str1 = str1 + "logg_phot=" + str(int(param["logg_phot"] * 100) / 100) + " logg_het=" + str(
-        int(param["logg_het"] * 100) / 100) + "\n"
-    str1 = str1 + "Tspot=" + str(int(param["Tspot"] * 10.) / 10.) + " Tfac=" + str(
-        int(param["Tfac"] * 10.) / 10.) + "\n"
-    str1 = str1 + "fspot=" + str(int(param["fspot"] * 10000.) / 10000.) + " ffac=" + str(
-        int(param["ffac"] * 10000) / 10000.)
-    return str1
+    # Infer mode if not provided
+    if mode is None:
+        if ("logFscale" in p) or ("Fscale" in p) or ("logErrInfl" in p) or ("errInfl" in p):
+            mode = "flux"
+        elif "Dscale" in p:
+            mode = "depth"
+        else:
+            # default to depth if ambiguous
+            mode = "depth"
+
+    def _fmt_num(x, n=4):
+        """
+
+        String formatter to avoid long floats
+        Parameters
+        ----------
+        x: float
+            Number to change to str
+        n: int
+            Number of points after the decimal to keep
+
+        Returns
+        -------
+        str(int(x * (10 ** n)) / (10 ** n))
+
+        """
+        try:
+            return str(int(x * (10 ** n)) / (10 ** n))
+        except Exception:
+            return str(x)
+
+    def _wrap(text, nchar):
+        """
+        Make sure that str do not go over a certain length for printing to fig
+
+        Parameters
+        ----------
+        text:
+            text to wrap
+        nchar:
+            N characters to do wrapping at
+
+        Returns
+        -------
+        full string with line breaks
+        """
+        if not nchar:
+            return text
+        words = text.split()
+        line, lines = "", []
+        for w in words:
+            if len((line + " " + w).strip()) <= nchar:
+                line = (line + " " + w).strip()
+            else:
+                lines.append(line)
+                line = w
+        if line:
+            lines.append(line)
+        return "\n".join(lines)
+
+    lines = []
+
+    # Optional header with fitted parameter names
+    if include_fit_list and fitparanames:
+        lines.append(_wrap("Fitted params: " + str(list(fitparanames)), wrap_at))
+
+    # Stellar params block
+    lines.append(
+        "Stellar params: Tphot=" + _fmt_num(p["Tphot"], 1) +
+        "  met=" + str(p.get("met", ""))
+    )
+    # use normalized keys
+    lines.append(
+        "logg_phot=" + _fmt_num(p.get("loggphot", p.get("logg_phot", np.nan)), 2) +
+        "  logg_het=" + _fmt_num(p.get("logghet", p.get("logg_het", np.nan)), 2)
+    )
+    lines.append(
+        "Tspot=" + _fmt_num(p["Tspot"], 1) +
+        "  Tfac=" + _fmt_num(p["Tfac"], 1)
+    )
+    lines.append(
+        "fspot=" + _fmt_num(p.get("fspot", 0.0), 4) +
+        "  ffac=" + _fmt_num(p.get("ffac", 0.0), 4)
+    )
+
+    # Mode-specific extras
+    if mode == "flux":
+        # Only include if present (exotune runs)
+        if "Fscale" in p:
+            lines.append("Fscale=" + _fmt_num(p["Fscale"], 4))
+        if "errInfl" in p:
+            lines.append("errInfl=" + _fmt_num(p["errInfl"], 4))
+    elif mode == "depth":
+        if "Dscale" in p:
+            lines.append("Dscale=" + _fmt_num(p["Dscale"], 4))
+
+    return "\n" + "\n".join(lines)
 
 
+def get_labels_from_fitparanames_master(fitparanames, include_units=False):
+    """
+    Build LaTeX labels for corner/trace plots, accepting SRU and XTU param names.
+
+    Parameters
+    ----------
+    fitparanames : list[str]
+    include_units : bool
+        If True, include [K] on temperature-related labels (XTU style).
+        If False, omit units (SRU style).
+
+    Returns
+    -------
+    list[str] : labels aligned with `fitparanames`
+    """
+    # Fix differences between the two naming conventions
+    alias = {
+        "loggphot": "logg_phot",
+        "logghet": "logg_het",
+        "dlogghet": "dlogg_het",
+    }
+
+    def norm(p):
+        return alias.get(p, p)
+
+    k_unit = " [K]" if include_units else ""
+
+    labels_map = {
+        "fspot":       r"$f_\mathrm{spot}$",
+        "log_fspot":   r"$\log_{10} f_\mathrm{spot}$",
+        "ffac":        r"$f_\mathrm{fac}$",
+        "log_ffac":    r"$\log_{10} f_\mathrm{fac}$",
+        "deltaTfac":   r"$\Delta T_\mathrm{fac}$" + k_unit,
+        "deltaTspot":  r"$\Delta T_\mathrm{spot}$" + k_unit,
+        "Tphot":       r"$T_\mathrm{phot}$" + k_unit,
+        "Dscale":      r"$D$",
+        "logFscale":   r"$\log_{10} F$",
+        "logErrInfl":  r"$\log_{10}\ \mathrm{err.\ factor}$",
+        "logg_het":    r"$\log g_\mathrm{het}$",
+        "dlogg_het":   r"$\Delta \log g_\mathrm{het}$",
+        "logg_phot":   r"$\log g_\mathrm{phot}$",
+    }
+
+    labels = []
+    for p in fitparanames:
+        key = norm(p)
+        labels.append(labels_map.get(key, p))  # fall back to raw name if unknown
+    return labels
 
 
 def get_labels_from_fitparanames(fitparanames):
@@ -2212,37 +2838,21 @@ def get_labels_from_fitparanames(fitparanames):
     -------
     labels to use in the corner plot
     """
-    labels = []
-    for p in fitparanames:
-        if p == "fspot":
-            labels.append(r"$f_\mathrm{spot}$")
-        elif p == "ffac":
-            labels.append(r"$f_\mathrm{fac}$")
-        elif p == "log_fspot":
-            labels.append(r"$\log_{10} f_\mathrm{spot}$")
-        elif p == "log_ffac":
-            labels.append(r"$\log_{10} f_\mathrm{fac}$")
-        elif p == "deltaTfac":
-            labels.append(r"$\Delta T_\mathrm{fac}$")
-        elif p == "deltaTspot":
-            labels.append(r"$\Delta T_\mathrm{spot}$")
-        elif p == "Tphot":
-            labels.append(r"$T_\mathrm{phot}$")
-        elif p == "Dscale":
-            labels.append(r"$D$")
-        elif p == "logg_het":
-            labels.append(r"log $g_\mathrm{het}$")
-        elif p == "dlogg_het":
-            labels.append(r"$\Delta$ log $g_\mathrm{het}$")
-        elif p == "logg_phot":
-            labels.append(r"log $g_\mathrm{phot}$")
-    return labels
+
+    return get_labels_from_fitparanames_master(fitparanames, include_units=False)
 
 
-def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit, fitparanames, flat_st_ctm_models,
-                             pad=0.25):
+
+
+def plot_maxlike_and_maxprob(spec,param,parabestfit,ind_maxprob,ind_bestfit,fitparanames,
+        models_flat,*,pad=0.25,legend_loc=4,title="Best-fit model",best_label="Max. Likelihood",prob_label="Max. Probability",
+        best_color="r",prob_color="slateblue",best_alpha=0.6,prob_alpha=1.0,best_marker=".",prob_marker="o",best_ms=50,
+        prob_ms=30,show_param_text=True,formatter=None,  include_units=False,
+        # choose ONE of (text_xy) or (text_rel); if neither, defaults to axes-fraction near top-left
+        text_xy=None,  text_rel=(0.02, 0.92),  text_fontsize=10,text_color="k",text_bbox=None,text_ha="left",text_va="top"):
     """
     Plot the maximum likelihood and maximum probability stellar contamination model spectra.
+    Works with TLS retrieval dict-like spec (spec["wave"]) or exotune-retrieval attribute spec (spec.wave).
 
     Parameters
     ----------
@@ -2271,23 +2881,47 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
         The axis with the plotted spectrum.
     """
 
-    # Plot best fit stellar contamination model
+
+    wave = _get(spec, "wave")
+    yval = _get(spec, "yval")
+    waveMin = _get(spec, "waveMin")
+    waveMax = _get(spec, "waveMax")
+
     fig, ax = spec.plot()
+
+    # fill best-fit dict
     param_bestfit = deepcopy(param)
     for i, p in enumerate(fitparanames):
         param_bestfit[p] = parabestfit[i]
-    ax.scatter(spec['wave'], flat_st_ctm_models[ind_maxprob], label="Max. Probability", color="slateblue", alpha=1.)
-    ax.scatter(spec['wave'], flat_st_ctm_models[ind_bestfit], label="Max. Likelihood", color="r", alpha=0.5, marker=".",
-               s=50)
 
-    ax.text(np.min(spec["waveMin"]) - pad / 4, 1.08 * np.median(spec['yval']),
-            format_param_str(param_bestfit, fitparanames), fontsize=10, color="k")
+    # plot points
+    ax.scatter(wave, models_flat[ind_maxprob], label=prob_label,
+               color=prob_color, alpha=prob_alpha, marker=prob_marker, s=prob_ms)
+    ax.scatter(wave, models_flat[ind_bestfit], label=best_label,
+               color=best_color, alpha=best_alpha, marker=best_marker, s=best_ms)
 
-    ax.set_xlim(np.min(spec["waveMin"]) - pad / 2, np.max(spec["waveMax"]) + pad)
-    ax.set_ylim(0.8 * np.median(spec['yval']), 1.15 * np.median(spec['yval']))
+    # annotate parameters
+    if show_param_text and callable(formatter):
+        try:
+            txt = formatter(param_bestfit, fitparanames, include_units=include_units)
+        except TypeError:
+            txt = formatter(param_bestfit, fitparanames)
 
-    ax.set_title("Best-fit model")
-    ax.legend(loc=4)
+        if text_xy is not None:
+            ax.text(text_xy[0], text_xy[1], txt,
+                    fontsize=text_fontsize, color=text_color,
+                    bbox=text_bbox, ha=text_ha, va=text_va)
+        else:
+            ax.annotate(txt, xy=text_rel, xycoords="axes fraction",
+                        fontsize=text_fontsize, color=text_color,
+                        bbox=text_bbox, ha=text_ha, va=text_va)
+
+    # limits, title, legend
+    med_y = np.median(yval)
+    ax.set_xlim(np.min(waveMin) - pad / 2, np.max(waveMax) + pad)
+    ax.set_ylim(0.8 * med_y, 1.15 * med_y)
+    ax.set_title(title)
+    ax.legend(loc=legend_loc)
     return fig, ax
 
 

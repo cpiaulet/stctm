@@ -164,7 +164,7 @@ In that file, you will find the setup of the grid in a block such as::
     # range of params for the grid
 
     logg_range = [2.5,5.5]
-    Teff_range = [np.min([2300.-param["Tphot"], -100.])+param["Tphot"], param["Tphot"]+1000.]
+    Teff_range = [np.max([param["Tphot"]-1000, 2300.]), param["Tphot"]+1000.]
     loggstep = 0.1 #cgs
     Teffstep = 20. #K
     resPower_target = 10000
@@ -174,7 +174,7 @@ In that file, you will find the setup of the grid in a block such as::
 Returning to the ``.ini`` file:
 * ``logg_range``: Range of log(g) covered in the grid(format ``minlogg_maxlogg``).
 * ``loggstep``: Grid step in log(g).
-* ``Teff_range``: Temperature range; ``default`` uses values calculated from ``Teffstar``: it assumes the default grid calculation setup, with`` min = np.min([2300.-Teffstar, -100.])+Teffstar`` and ```max=Teffstar+1000``.
+* ``Teff_range``: Temperature range; ``default`` uses values calculated from ``Teffstar``: it assumes the default grid calculation setup, with`` min = np.max([Teffstar-1000, 2300.]) `` and ```max=Teffstar+1000``.
 * ``Teffstep``: Grid step in temperature.
 * ``resPower_target``: Resolving power at which the grid was created.
 * ``wave_range``: Wavelength range for fitting (microns, ``min_max`` format).

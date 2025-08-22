@@ -82,7 +82,6 @@ def main(argv):
 
     ## Load observed spectrum
     spec = ptspec.TransSpec(params["path_to_spec"], inputtype=params["spec_format"])
-    # pdb.set_trace()
 
 
     ## Prepare for MCMC
@@ -92,7 +91,6 @@ def main(argv):
 
         param, fitparanames = sru.init_default_and_fitted_param_fromDict(params,
                                                             Dscale_guess=np.median(spec["yval"]))
-
         print("\n** Fitparanames:", fitparanames)
         print("\n** Param: ", param)
 
@@ -302,7 +300,6 @@ def main(argv):
         flat_st_ctm_models = blobs.T[:, burnin:]["st_ctm_model"].reshape((-1))
         if params["save_fit"]:
             np.save(results_folder+"st_ctm_model_blobs_"+runname+".npy", flat_st_ctm_models)
-
 
         fig, ax = sru.plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob,
                                                ind_bestfit, fitparanames, flat_st_ctm_models, pad=params["pad"])

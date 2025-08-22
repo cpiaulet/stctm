@@ -130,7 +130,7 @@ Under ``[stellar models]``, you will find the following options::
     loggstep = 0.1
 
     # options are default or min_max. default assumes the default grid calculation setup, with
-    # min = np.min([2300.-Teffstar, -100.])+Teffstar and max=Teffstar+1000.
+    # min = np.max([Teffstar-1000, 2300]) and max=Teffstar+1000.
     Teff_range = default
 
     Teffstep = 20.
@@ -143,7 +143,7 @@ In that file, you will find the setup of the grid in a block such as::
     # range of params for the grid
 
     logg_range = [2.5,5.5]
-    Teff_range = [np.min([2300.-param["Tphot"], -100.])+param["Tphot"], param["Tphot"]+1000.]
+    Teff_range = [np.max([param["Tphot"]-1000, 2300.]), param["Tphot"]+1000.]
     loggstep = 0.1 #cgs
     Teffstep = 20. #K
     resPower_target = 10000
