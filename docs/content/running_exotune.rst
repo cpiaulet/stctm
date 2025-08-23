@@ -65,7 +65,7 @@ Inputs can be edited in the TOML file or passed as command-line arguments. For i
     stctm_exotune template_ini_exotune.toml -fitspot=0
 
 Modifying the TOML file to make it your own
-------------------------------------------
+-------------------------------------------
 
 The sections and parameters below correspond directly to the exotune ``.toml`` file.
 

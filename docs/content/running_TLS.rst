@@ -70,8 +70,8 @@ A few additional tips:
 
     stctm_TLS template_ini_stctm.toml -res_suffix=second_test
 
-Modifying the ini file to make it your own
-------------------------------------------
+Modifying the TOML file to make it your own
+-------------------------------------------
 
 All the inputs you need to provide are specified in the ``.toml`` file.
 
