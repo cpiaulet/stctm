@@ -5,7 +5,7 @@
 
 ## Documentation
 
-Full documentation including installation instructions, run examples, and information on how to contribute to *stctm* can be found at: WEBSITE.
+Full documentation including installation instructions, run examples, and information on how to contribute to *stctm* can be found at: https://stctm.readthedocs.io.
 
 
 ## Previous usage of the code in the literature
