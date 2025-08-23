@@ -14,6 +14,9 @@ dist/
 downloads/
 eggs/
 .eggs/
+.github/
+.git/
+.idea/
 lib/
 lib64/
 parts/
