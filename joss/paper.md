@@ -65,7 +65,7 @@ A description of `stctm` can be found in several of the early papers that employ
 `stctm` has been applied widely to the interpretation of transmission spectra of rocky planets and small sub-Neptunes, including in [@Lim2023; @Roy:2023; @PiauletGhorayeb:2024; @Radica:2025; @Ahrer:2025; @PiauletGhorayeb:2025].
 
 # Future Developments
-The latest version of `stctm` at the time of writing (v2.0.2) supports MCMC retrievals on transmission spectra and on out-of-transit stellar spectra (`exotune`), and provides model comparison statistics, model and parameter samples as well as publication-ready figures. 
+The latest version of `stctm` at the time of writing (v2.1.0) supports MCMC retrievals on transmission spectra and on out-of-transit stellar spectra (`exotune`), and provides model comparison statistics, model and parameter samples as well as publication-ready figures. 
 Future versions will expand on these functionalities to include user-friendly scripts tailored to post-processing only for an already-run retrieval (creating custom plots), as well as a Nested Sampling alternative for the retrievals.
 Users are encouraged to propose or contribute any other features.
 
