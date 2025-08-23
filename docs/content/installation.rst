@@ -58,12 +58,12 @@ I created a dummy spectrum (with only 1 point) so you can run a few-second test 
 
 #. Navigate to your copy of ``stellar_contamination_analysis/template_analysis/`` and run the following test in the command line::
 
-     stctm_TLS test_ini_stctm.ini
+     stctm_TLS test_ini_stctm.toml
 
 This should display print statements as the code is running, and create a directory with output files for this "mock" fit under ``stellar_contamination_results/``.
 
 To test instead that the parallel version of the code works (with my custom wrapper around multiprocessing ``Pool``), you can simply run::
 
-     stctm_TLS test_ini_stctm.ini -parallel=True -ncpu=2 -res_suffix=singlebin_testcode_parallel
+     stctm_TLS test_ini_stctm.toml -parallel=True -ncpu=2 -res_suffix=singlebin_testcode_parallel
 
 ... and that's it! You can read more in the following pages on how to customize what you do with *stctm*.

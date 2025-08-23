@@ -1,0 +1,115 @@
+[paths_and_labels]
+
+# path to spectrum file
+path_to_spec = "../../observations/TRAPPIST_1_b_NIRISS_SOSS/Visit1_Order1And2.spec"
+
+# format option for reading in as a TransSpec object
+# create a new one in pytransspec.py if needed. Current options: ["basic", "wavemm"]
+spec_format = "wavemm"
+
+# stellar models grid file path
+stmodfile = "../../R10000_model_grids/TRAPPIST_1_pymsg.h5"
+
+# whether to save the fit results to the output directory
+save_fit = true
+
+# suffix for all output files
+res_suffix = "TRAPPIST_1_b_testINIexample"
+
+[stellar_params]
+
+# effective temperature in K
+Teffstar = 2566
+
+# metallicity [Fe/H] in dex
+feh = 0.040
+
+# log g in cgs units
+loggstar = 5.2396
+
+## Below: for the default values
+
+# Where to get the photosphere log g value from: user-specified value or pre-set loggstar
+# options: "value", "loggstar"
+logg_phot_source = "loggstar"
+# value to use if 'value' option was chosen
+logg_phot_value = 5
+
+# Where to get the heterogeneity log g value from: user-specified value, or pre-set loggstar, or whatever logg_phot is
+# options: "value", "logg_phot"
+logg_het_default_source = "logg_phot"
+# value to use if 'value' option was chosen
+logg_het_value = 5
+
+[stellar_models]
+
+# range of params for the grid
+
+# min_max
+logg_range = [2.5,5.5]
+# grid step in cgs
+loggstep = 0.1
+
+# options are default or min_max. default assumes the default grid calculation setup, with
+# min = np.max([Teffstar-1000, 2300.]) and max=Teffstar+1000.
+Teff_range = "default"
+
+# grid step in K
+Teffstep = 20.0
+
+# resolving power at which the grid was calculated
+resPower_target = 10000
+
+# wavelength edges for the grid calculation
+wave_range = [0.2,5.4]
+
+[MCMC_params]
+
+# whether to run the MCMC in parallel
+parallel = true
+# number of cpu to run the MCMC on
+ncpu = 30
+
+# number of MCMC steps
+nsteps=5000
+# fraction of the chains to be discarded as burn-in [0-1]
+frac_burnin = 0.6
+
+## Which parameters to fit
+
+# whether to fit heterogeneity fractions
+fitspot = true
+fitfac = true
+
+# whether to fit temperatures of spectral components
+fitThet = true
+fitTphot = true
+
+# whether to fit log g of spectral components
+fitlogg_phot = true
+fitlogg_het = true
+
+# whether to marginalize over/fit the bare-rock transit depth
+fitDscale = true
+
+[priors]
+
+# list of parameters with Gaussian priors. For multiple params add to the list: e.g. ["Tphot","ffac"]. Otherwise leave empty.
+gaussparanames = ["Tphot"]
+# mean and std of the Gaussian prior. For multiple parameters create a list of lists with [[mean1, std1],[mean2,std2]]. Length must match gaussparanames.
+# leave empty if no gaussparanames.
+hyperp_gausspriors = [[2566,70]]
+
+# specify whether we want to fit fspot/ffac with prior uniform in log or lin space
+# (e.g. [0,0]: both in lin space; [1,0]: fspot in log space, ffac in lin space)
+fitLogfSpotFac = [0,0]
+# lower and upper bound of the log(prior) on the heterogeneity fraction(s).
+hyperp_logpriors = [-5, 0]
+
+[plotting]
+
+# amount of padding in microns (unit used for spectrum plots)
+pad = 0.25
+
+# resolving power to smooth model spectra to (when plotting them)
+target_resP = 100

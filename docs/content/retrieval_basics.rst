@@ -18,32 +18,27 @@ Detailed instructions on how to run TLS retrievals are available :ref:`here <run
 Input structure
 ---------------
 
-* The inputs required to run a retrieval are structured into a file with a ``.ini`` extension. Examples are provided in each of ``stellar_contamination_analysis/`` and ``exotune_analysis/`` for TLS and stellar spectrum retrievals respectively. You can refer to the relevant page for details on how to structure inputs for each type of retrievals to create your own ini file.
+* The inputs required to run a retrieval are structured into a file with a ``.toml`` extension. Examples are provided in each of ``stellar_contamination_analysis/`` and ``exotune_analysis/`` for TLS and stellar spectrum retrievals respectively. You can refer to the relevant page for details on how to structure inputs for each type of retrievals to create your own TOML file.
 
-* The relative paths are set up such that your run files and ini files are stored in a folder of your choice (say, ``your_analysis_name/``), which will be a subfolder of either of the analysis directories depending on the type of retrieval: either ``stellar_contamination_results/your_analysis_name/`` or ``exotune_results/your_analysis_name/``. Before starting a retrieval of your own, I recommend creating a copy of the folders as they are set up in the ``example/`` directory.
+* The relative paths are set up such that your run files and toml input files are stored in a folder of your choice (say, ``your_analysis_name/``), which will be a subfolder of either of the analysis directories depending on the type of retrieval: either ``stellar_contamination_results/your_analysis_name/`` or ``exotune_results/your_analysis_name/``. Before starting a retrieval of your own, I recommend creating a copy of the folders as they are set up in the ``example/`` directory.
 
-* You will likely create one "master" ini file per retrieval, which can be saved under the ``stellar_contamination_analysis/your_analysis_name/`` or the ``exotune_analysis/your_analysis_name/`` subfolder, depending on the retrieval type, with the possibility to make minor variations without creating a brand new file each time for different retrieval flavors! Again, this is documented in the section on ini files.
-
-The ini files are provided as inputs to the template run files. I provide one template run file per retrieval type (``stellar_retrieval_v15_generic_runfile.py`` and ``exotune_runscript_v5_clean_20250422.py`` respectively. You should not need to edit these files as they serve three main purposes:
-* Read the ini files and set up the retrievals.
-* Set up the retrievals to run in serial or in parallel, if you have multiple cores available.
-* Post-process the retrieval outputs to create results files you can use for post-processing, as well as diagnostics and paper-ready plots.
+* You will likely create one "master" TOML file per retrieval, which can be saved under the ``stellar_contamination_analysis/your_analysis_name/`` or the ``exotune_analysis/your_analysis_name/`` subfolder, depending on the retrieval type, with the possibility to make minor variations without creating a brand new file each time for different retrieval flavors! Again, this is documented in the section on TOML files specific to each type of retrievals.
 
 Running a retrieval
 -------------------
 
 Typically, running a retrieval should only entail the following steps:
 
-1. Navigate via the command line to the analysis directory where you have your ini file.
-2. Run using the neat ``stctm_TLS``/``stctm_exotune`` CLI utility and with the ini file as an argument,
+1. Navigate via the command line to the analysis directory where you have your TOML file.
+2. Run using the neat ``stctm_TLS``/``stctm_exotune`` CLI utility and with the TOML file as an argument,
 
 so in the command line, this looks like e.g.::
 
-   stctm_TLS your_ini_file.ini
+   stctm_TLS your_toml_file.toml
 
 or for the stellar spectrum retrievals::
 
-   python exotune_runscript_v5_clean_20250422.py your_ini_file.ini
+   stctm_exotune your_toml_file.toml
 
 Typically, you should not need to edit these run scripts to run standard retrievals as intended by the current code structure.
 

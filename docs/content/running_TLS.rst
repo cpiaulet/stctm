@@ -8,7 +8,7 @@ Now that you have properly installed *stctm* and run the test case, you are read
 
 You can fit any transmission spectrum (loaded into the code as a ``TransSpec`` object) assuming any variations from a straight line are due to the transit light source effect. In its current configuration, you can fit the contributions of spots and/or faculae, varying or fixing the temperatures of the heterogeneity components, as well as fit the surface gravity used for the photosphere and/or heterogeneity models. The code has the flexibility to handle Gaussian priors on any fitted parameter as well as linear or log-uniform priors on the heterogeneity covering fractions. You obtain a range of outputs including posterior samples (parameters, spectra), run statistics for model comparison, and publication-ready plots.
 
-I will walk you through how to set up your ``.ini`` file from the example file provided in order to fit any of your needs, how to run the retrieval, and what to expect in terms of baseline outputs (that can be used for later post-processing).
+I will walk you through how to set up your ``.toml`` file from the example file provided in order to fit any of your needs, how to run the retrieval, and what to expect in terms of baseline outputs (that can be used for later post-processing).
 
 
 
@@ -55,38 +55,38 @@ Run instructions
 You should follow the following folder structure, starting with a copy of the ``stctm/example/`` directory anywhere in your installation you may want to run the code.
 
 * ``stellar_contamination_analysis/any_analysis_folder_name/``: my advice is to create a new analysis folder name under the ``stellar_contamination_analysis`` folder for each project you work on. In the example, that folder is called ``template_analysis/``.
-* In that folder, you'll need to have at least one ``.ini`` file, where you specify all the inputs following the instructions in the comments (see more information below).
+* In that folder, you'll need to have at least one ``.toml`` file, where you specify all the inputs following the instructions in the comments (see more information below).
 * At the same level as ``stellar_contamination_analysis/``, create a folder called ``stellar_contamination_results/``. For each of your runs, a subfolder will be added under this results directory and the run results will be saved there.
 
 Here is an example one-liner to run a *stctm* retrieval from a planet spectrum, after navigating to ``stellar_contamination_analysis/template_analysis`` and in the command line::
 
-    stctm_TLS template_ini_stctm.ini
+    stctm_TLS template_ini_stctm.toml
 
 A few additional tips:
 
-- The "ini file" (.ini) contains all the user input necessary to run the code, including stellar and mcmc parameters, saving paths and plotting options (see below for details of setting it up)
-- The path to an "ini file" needs to be provided as an argument if the script is run from the command line
-- Any parameter in the ini file can alternatively be modified from the default using the command line (instead of modifying the file). For instance, if you want to run the same fit as above, but only modify the suffix used for creating the output directory, you can do it as follows::
+- The "TOML file" (.toml) contains all the human-readable user input necessary to run the code, including stellar and mcmc parameters, saving paths and plotting options (see below for details of setting it up)
+- The path to a TOML file needs to be provided as an argument if the script is run from the command line
+- Any parameter in the TOML file can alternatively be modified from the default using the command line (instead of modifying the file). For instance, if you want to run the same fit as above, but only modify the suffix used for creating the output directory, you can do it as follows::
 
-    stctm_TLS template_ini_stctm.ini -res_suffix=second_test
+    stctm_TLS template_ini_stctm.toml -res_suffix=second_test
 
 Modifying the ini file to make it your own
 ------------------------------------------
 
-All the inputs you need to provide are specified in the ``.ini`` file, in a way similar to what I implemented for *smint* (github.com.cpiaulet/smint).
+All the inputs you need to provide are specified in the ``.toml`` file.
 
 Setting up labels and path to spectrum file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Under ``[paths and labels]``  the ini file will look like this::
+Under ``[paths_and_labels]``  the TOML file will look like this::
 
-    [paths and labels]
+    [paths_and_labels]
 
-    path_to_spec = ../../observations/TRAPPIST_1_b_NIRISS_SOSS/Visit1_Order1And2.spec
-    spec_format = wavemm
-    stmodfile = ../../R10000_model_grids/TRAPPIST_1_pymsg.h5
-    save_fit = True
-    res_suffix = TRAPPIST_1_b_testINIexample
+    path_to_spec = "../../observations/TRAPPIST_1_b_NIRISS_SOSS/Visit1_Order1And2.spec"
+    spec_format = "wavemm"
+    stmodfile = "../../R10000_model_grids/TRAPPIST_1_pymsg.h5"
+    save_fit = true
+    res_suffix = "TRAPPIST_1_b_testINIexample"
 
 
 You can edit the set up as follows:
@@ -99,20 +99,21 @@ You can edit the set up as follows:
 Setting up the stellar parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Under ``[stellar params]``, you have the following options::
+Under ``[stellar_params]``, you have the following options::
 
-    [stellar params]
+    [stellar_params]
 
     Teffstar = 2566
     feh = 0.040
     loggstar = 5.2396
 
-    logg_phot_source = loggstar
+    logg_phot_source = "loggstar"
     logg_phot_value = 5
-    logg_het_default_source = logg_phot
+    logg_het_default_source = "logg_phot"
     logg_het_value = 5
 
-* Enter the parameters of the star (effective temperature, metallicity Fe/H, log g) to set the defaults for the fit.
+
+* Enter the parameters of the star (effective temperature, metallicity Fe/H, log g in cgs) to set the defaults for the fit.
 
 This is how to set up (potentially distinct) default values for the stellar and heterogeneity log g:
 
@@ -122,21 +123,22 @@ This is how to set up (potentially distinct) default values for the stellar and 
 Reading in the grid of stellar models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Under ``[stellar models]``, you will find the following options::
+Under ``[stellar_models]``, you will find the following options::
 
-    [stellar models]
+    [stellar_models]
 
-    logg_range = 2.5_5.5
+    logg_range = [2.5,5.5]
     loggstep = 0.1
 
     # options are default or min_max. default assumes the default grid calculation setup, with
-    # min = np.max([Teffstar-1000, 2300]) and max=Teffstar+1000.
-    Teff_range = default
+    # min = np.max([Teffstar-1000, 2300.]) and max=Teffstar+1000.
+    Teff_range = "default"
 
-    Teffstep = 20.
+    Teffstep = 20.0
     resPower_target = 10000
-    wave_range = 0.2_5.4
+    wave_range = [0.2,5.4]
 
+As indicated in the comment, setting Teff_range to "default" means ``min = np.max([Teffstar-1000, 2300.])`` and  ``max=Teffstar+1000.``. For custom values, set the parameter to ``[min, max]``.
 At this stage, refer to your ``create_fixedR_grid_pymsg_template.py`` file (or the equivalent file you used to create your grid of stellar models).
 In that file, you will find the setup of the grid in a block such as::
 
@@ -150,18 +152,18 @@ In that file, you will find the setup of the grid in a block such as::
     wv_min_um = 0.2
     wv_max_um = 5.4
 
-This is the information you need to take and paste into your ``.ini`` file under the ``[stellar models]`` section.
+This is the information you need to take and paste into your ``.toml`` file under the ``[stellar models]`` section.
 In particular, make sure to modify the range and spacing of the grid in the log g and Teff dimensions to match those of the grid you generated. You also need to match the resolving power, and wavelength edges you picked when setting up the grid.
 
 Choosing the setup of your retrieval
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Under ``[MCMC params]`` you will see the following options::
+Under ``[MCMC_params]`` you will see the following options::
 
-    [MCMC params]
+    [MCMC_params]
 
     # whether to run the MCMC in parallel
-    parallel = True
+    parallel = true
     # number of cpu to run the MCMC on
     ncpu = 30
 
@@ -173,52 +175,52 @@ Under ``[MCMC params]`` you will see the following options::
     ## Which parameters to fit
 
     # whether to fit heterogeneity fractions
-    fitspot = True
-    fitfac = True
+    fitspot = true
+    fitfac = true
 
     # whether to fit temperatures of spectral components
-    fitThet = True
-    fitTphot = True
+    fitThet = true
+    fitTphot = true
 
     # whether to fit log g of spectral components
-    fitlogg_phot = True
-    fitlogg_het = True
+    fitlogg_phot = true
+    fitlogg_het = true
 
     # whether to marginalize over/fit the bare-rock transit depth
-    fitDscale = True
+    fitDscale = true
 
 Here is how to choose your setup for each of these parameters:
 
-* ``parallel``: if set to ``True``, then the MCMC will be run in parallel on a number of CPUs specified by the ``ncpu`` parameter right below (by default, 30)
+* ``parallel``: if set to ``true``, then the MCMC will be run in parallel on a number of CPUs specified by the ``ncpu`` parameter right below (by default, 30)
 * ``ncpu``: Number of CPUs to use for the parallel MCMC run.
 * ``nsteps``: the number of steps for each of the MCMC chains. I recommend at least 5000.
 * ``frac_burnin``: the fraction of steps discarded as burn-in to obtain the posterior. By default, set to 60% (value of 0.6).
-* ``fitspot``: ``True`` if you want to fit for the fraction of unocculted spots, ``False`` otherwise.
-* ``fitfac``: ``True`` if you want to fit for the fraction of unocculted faculae, ``False`` otherwise.
-* ``fitThet``: ``True`` if you want to fit for the temperature of unocculted spots and/or faculae, ``False`` otherwise.
-* ``fitTphot``: ``True`` if you want to fit for the temperature of the photosphere, ``False`` otherwise.
-* ``fitlogg_phot``: ``True`` if you want to fit the photosphere log g, ``False`` otherwise.
-* ``fitlogg_het``: ``True`` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ``False`` otherwise.
-* ``fitDscale``: ``True`` if you want to fit for the bare-rock transit depth (recommended), ``False`` otherwise.
+* ``fitspot``: ``true`` if you want to fit for the fraction of unocculted spots, ``false`` otherwise.
+* ``fitfac``: ``true`` if you want to fit for the fraction of unocculted faculae, ``false`` otherwise.
+* ``fitThet``: ``true`` if you want to fit for the temperature of unocculted spots and/or faculae, ``false`` otherwise.
+* ``fitTphot``: ``true`` if you want to fit for the temperature of the photosphere, ``false`` otherwise.
+* ``fitlogg_phot``: ``true`` if you want to fit the photosphere log g, ``false`` otherwise.
+* ``fitlogg_het``: ``true`` if you want to fit a different log g for the spectrum of the heterogeneity component compared to that of the photosphere, ``false`` otherwise.
+* ``fitDscale``: ``true`` if you want to fit for the bare-rock transit depth (recommended), ``false`` otherwise.
 
 Priors
 ^^^^^^
 
-Under ``[priors]``, the ``.ini`` file should look like this::
+Under ``[priors]``, the ``.toml`` file should look like this::
 
     [priors]
 
-    # list of parameters with Gaussian priors. For multiple params sep. with '_': e.g. Tphot_ffac. Otherwise leave empty.
-    gaussparanames = Tphot
-    # mean and std of the Gaussian prior. For multiple parameters separate with a vertical line: e.g. mean1_std1|mean2_std2
+    # list of parameters with Gaussian priors. For multiple params add to the list: e.g. ["Tphot","ffac"]. Otherwise leave empty.
+    gaussparanames = ["Tphot"]
+    # mean and std of the Gaussian prior. For multiple parameters create a list of lists with [[mean1, std1],[mean2,std2]]. Length must match gaussparanames.
     # leave empty if no gaussparanames.
-    hyperp_gausspriors = 2566_70
+    hyperp_gausspriors = [[2566,70]]
 
     # specify whether we want to fit fspot/ffac with prior uniform in log or lin space
-    # (e.g. 0_0: both in lin space; 1_0: fspot in log space, ffac in lin space)
-    fitLogfSpotFac = 0_0
+    # (e.g. [0,0]: both in lin space; [1,0]: fspot in log space, ffac in lin space)
+    fitLogfSpotFac = [0,0]
     # lower and upper bound of the log(prior) on the heterogeneity fraction(s).
-    hyperp_logpriors = -5_0
+    hyperp_logpriors = [-5, 0]
 
 First, you can set a Gaussian prior on any of your fitted parameters, using the ``gaussparanames`` and ``hyperp_gausspriors`` variables.
 
@@ -227,15 +229,16 @@ By default (uniform priors on all fitted parameters)::
     gaussparanames =
     hyperp_gausspriors =
 
-Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ``gaussparanames``, and add a component to ``hyperp_gausspriors`` that specifies the mean and standard deviation of the gaussian parameter to adopt (looks like ``mean_std``). Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE)::
+Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ``gaussparanames``, and add a component to ``hyperp_gausspriors`` that specifies the mean and standard deviation of the gaussian parameter to adopt (looks like ``[[mean,std]]`` or `[[mean1,std1],[mean2,std2]]`` for multiple paramters in ``gaussparanames``).
+Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE)::
 
     gaussparanames = Tphot
     hyperp_gausspriors = 2566_70
 
 The spot/faculae covering fractions can also be fitted with priors that are uniform in linear space (default) or in log space. This is dictated by the ``fitLogfSpotFac`` parameter.
-* Use ``fitLogfSpotFac = 0_0`` for the default settings of both parameters fitted with linear-uniform priors
+* Use ``fitLogfSpotFac = [0,0]`` for the default settings of both parameters fitted with linear-uniform priors
 * Set the first/second element to 1 instead to use a log-uniform prior on ``fspot``/``ffac``.
-* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ``hyperp_logpriors = lowerBound_upperBound``.
+* If you choose to fit either parameter in log space, the boundaries of the prior on log(fhet) will be set by ``hyperp_logpriors = [lowerBound,upperBound]``.
 
 If you wish to change the way the prior is set up on any of the fitted parameters, you can do it by changing the dictionary created by the function ``get_param_priors()`` in ``stellar_retrieval_utilities.py``.
 
@@ -264,7 +267,7 @@ Inputs to the code:
 
 1. Input records:
 
-* a copy of the run file that was used and of the .ini file with the specified inputs
+* a copy of the run file that was used and of the .toml file with the specified inputs
 * a copy of the version of ``stellar_retrieval_utilities.py`` that was used
 * a figure displaying the spectrum being fitted
 * ``defaultparams``: CSV file with the default parameters used to initialize the fit
