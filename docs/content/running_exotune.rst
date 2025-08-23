@@ -37,17 +37,17 @@ For reference, here is how ``StellSpec`` objects are initialized from a table in
 * You may read your data using any compatible astropy table format (see the `Astropy Table I/O documentation <https://docs.astropy.org/en/stable/table/io.html>`_).
 * Ensure your wavelength array, ``waveMin``, and ``waveMax`` are in microns (convert if necessary).
 
-The recommended approach is to provide your spectrum file in one of these formats and then instantiate your object by specifying the format (via the ``spec_format`` parameter in your ``.ini`` file, see below).
+The recommended approach is to provide your spectrum file in one of these formats and then instantiate your object by specifying the format (via the ``spec_format`` parameter in your ``.toml`` file, see below).
 
 In summary, as long as your input file fits one of these supported formats or you extend ``StellSpec`` for your format, you will be able to analyze your observed stellar spectrum with *exotune*.
 
 Setting up an *exotune* retrieval: Run instructions
 ---------------------------------------------------
 
-The ``.ini`` file structure largely mirrors that of TLS retrievals (see :ref:`runningTLS` for folder layout). The key exotune-specific modifications are:
+The ``.toml`` file structure largely mirrors that of TLS retrievals (see :ref:`runningTLS` for folder layout). The key exotune-specific modifications are:
 
 * The analysis folder is ``exotune_analysis/any_analysis_folder_name/``. Create a new folder for each project under ``exotune_analysis/``, e.g., ``template_exotune_analysis/``.
-* The default INI file is ``template_ini_exotune.ini`` which you can use as a starting point to build your own.
+* The default TOML file is ``template_ini_exotune.toml`` which you can use as a starting point to build your own.
 * Results are saved in ``exotune_results/``, a sibling folder to ``exotune_analysis/``. Each run produces a subfolder in ``exotune_results/``.
 * Ensure all environment variables and paths are correctly set (refer to comments at the top of the run script for requirements), copied here::
 
@@ -58,40 +58,42 @@ The ``.ini`` file structure largely mirrors that of TLS retrievals (see :ref:`ru
 
 Example command to run exotune using the CLI helper, after navigating to your analysis folder::
 
-    stctm_exotune template_ini_exotune.ini
+    stctm_exotune template_ini_exotune.toml
 
-Inputs can be edited in the INI file or passed as command-line arguments. For instance, to switch off ``fitspot``::
+Inputs can be edited in the TOML file or passed as command-line arguments. For instance, to switch off ``fitspot``::
 
-    stctm_exotune template_ini_exotune.ini -fitspot=0
+    stctm_exotune template_ini_exotune.toml -fitspot=0
 
-Modifying the INI file to make it your own
+Modifying the TOML file to make it your own
 ------------------------------------------
 
-The sections and parameters below correspond directly to the exotune ``.ini`` file.
+The sections and parameters below correspond directly to the exotune ``.toml`` file.
 
 Choosing inputs and starting format
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Contrary to ``stctm``, for ``exotune`` you can either start from a pre-processed existing flux-calibrated stellar spectrum or from a time series of spectra. If the latter is the starting point, then *exotune* will proceed to some pre-processing steps to compute the "master" out-of-transit stellar spectrum given the pre-processing options detailed in the subsection below.
 
-Under ``[choice of inputs]``::
+Under ``[choice_of_inputs]``::
 
-    [choice of inputs]
+    [choice_of_inputs]
 
-    label_obs = test_visit
-    start_from_timeseries = False
-    save_median_spectrum = False
-    path_save_median_spectrum = ../../observations/planetname/planet_outoftransit_spectrum.csv
-    path_to_stellar_spec_ts =
-    path_to_spec = ../../observations/TRAPPIST_1_NIRSpec/exotune_templatespectrum.csv
-    spec_format = basic
-    stmodfile = ../../R10000_model_grids/TRAPPIST_1_pymsg.h5
+    label_obs = "test_visit"
+    start_from_timeseries = false
+    save_median_spectrum = false
+    path_save_median_spectrum = "../../observations/planetname/planet_outoftransit_spectrum.csv"
+    path_to_stellar_spec_ts = ""
+
+    path_to_spec = "../../observations/TRAPPIST_1_NIRSpec/exotune_templatespectrum.csv"
+    spec_format = "basic"
+
+    stmodfile = "../../R10000_model_grids/TRAPPIST_1_pymsg.h5"
 
 * ``label_obs``: Short label for this dataset for tracking results and outputs.
-* ``start_from_timeseries``: ``True`` if starting from a time series of spectra, ``False`` for a pre-processed single spectrum file (see below for pre-processing).
-* ``save_median_spectrum``: If starting from a timeseries, set ``True`` to save the computed median spectrum.
-* ``path_save_median_spectrum``: Output path for the median spectrum CSV (used only if ``save_median_spectrum`` is ``True``).
-* ``path_to_stellar_spec_ts``: Path to the time series file (used if ``start_from_timeseries`` is ``True``).
-* ``path_to_spec``: Path to single spectrum file (used if ``start_from_timeseries`` is ``False``).
+* ``start_from_timeseries``: ``true`` if starting from a time series of spectra, ``false`` for a pre-processed single spectrum file (see below for pre-processing).
+* ``save_median_spectrum``: If starting from a timeseries, set ``true`` to save the computed median spectrum.
+* ``path_save_median_spectrum``: Output path for the median spectrum CSV (used only if ``save_median_spectrum`` is ``true``).
+* ``path_to_stellar_spec_ts``: Path to the time series file (used if ``start_from_timeseries`` is ``true``).
+* ``path_to_spec``: Path to single spectrum file (used if ``start_from_timeseries`` is ``false``).
 * ``spec_format``: Spectrum format string for loading into ``StellSpec``. See ``pystellspec.py`` for supported formats or to add a custom format.
 * ``stmodfile``: Path to the stellar models grid file (HDF5).
 
@@ -101,26 +103,29 @@ Preprocessing options
 Under ``[preprocessing]``::
 
     [preprocessing]
-    optimize_param = False
-    obsmaskpattern= nomask
+
+    optimize_param = false
+    obsmaskpattern= "nomask"
     kern_size = 19
-    jd_range_mask =
-    wave_range_mask =
+
+    jd_range_mask = []
+    wave_range_mask = []
+
 
 * ``optimize_param``: ``True`` to only preprocess and visualize (no MCMC, just diagnostic plots).
 * ``obsmaskpattern``: Label used for the specific mask pattern (will be used as a string when saving the run).
 * ``kern_size``: Kernel size for median filtering the plotted light curve (for visualization only).
-* ``jd_range_mask``: Custom time-domain mask. To make sure that some intervals of time are ignored, e.g. in-transit, or during a stellar flare, enter their time stamps as ``start1_end1|start2_end2|...``.
+* ``jd_range_mask``: Custom time-domain mask. To make sure that some intervals of time are ignored, e.g. in-transit, or during a stellar flare, enter their time stamps as ``[[start1,end1],[start2,end2],...]``.
 * ``wave_range_mask``: Custom wavelength-domain mask, same format as above.
 
 Saving options
 ^^^^^^^^^^^^^^
 
-Under ``[saving options]``::
+Under ``[saving_options]``::
 
-    [saving options]
-    save_fit = True
-    res_suffix = test_for_GitHub
+    [saving_options]
+    save_fit = true
+    res_suffix = "test_for_GitHub"
 
 * ``save_fit``: ``True`` to save results in the output directory after completion.
 * ``res_suffix``: Suffix tagging the output files for identification; change for each new run.
@@ -128,13 +133,14 @@ Under ``[saving options]``::
 Stellar parameters
 ^^^^^^^^^^^^^^^^^^
 
-Under ``[stellar params]``::
+Under ``[stellar_params]``::
 
-    [stellar params]
-    Teffstar = 2566
+    [stellar_params]
+    Teffstar = 2566.0
     feh = 0.040
     loggstar = 5.2396
-    logg_phot_source = value
+
+    logg_phot_source = "value"
     logg_phot_value = 2.5
 
 * ``Teffstar``: Effective temperature of the star in Kelvin.
@@ -147,14 +153,15 @@ Reading in the grid of stellar models
 
 Under ``[stellar models]``::
 
-    [stellar models]
-    label_grid = PHOENIX_TRAPPIST_1
-    logg_range = 2.5_5.5
+    [stellar_models]
+
+    label_grid = "PHOENIX_TRAPPIST_1"
+    logg_range = [2.5,5.5]
     loggstep = 0.1
-    Teff_range = default
-    Teffstep = 20.
+    Teff_range = "default"
+    Teffstep = 20.0
     resPower_target = 10000
-    wave_range = 0.2_5.4
+    wave_range = [0.2,5.4]
 
 * ``label_grid``: Name/label of the stellar model grid (used as a string to save the run).
 
@@ -171,36 +178,41 @@ In that file, you will find the setup of the grid in a block such as::
     wv_min_um = 0.2
     wv_max_um = 5.4
 
-Returning to the ``.ini`` file:
-* ``logg_range``: Range of log(g) covered in the grid(format ``minlogg_maxlogg``).
+Returning to the ``.toml`` file:
+* ``logg_range``: Range of log(g) covered in the grid(format ``[minlogg,maxlogg]``).
 * ``loggstep``: Grid step in log(g).
-* ``Teff_range``: Temperature range; ``default`` uses values calculated from ``Teffstar``: it assumes the default grid calculation setup, with`` min = np.max([Teffstar-1000, 2300.]) `` and ```max=Teffstar+1000``.
+* ``Teff_range``: Temperature range; ``default`` uses values calculated from ``Teffstar``: it assumes the default grid calculation setup, with`` min = np.max([Teffstar-1000, 2300.]) `` and ``max=Teffstar+1000``.
 * ``Teffstep``: Grid step in temperature.
 * ``resPower_target``: Resolving power at which the grid was created.
-* ``wave_range``: Wavelength range for fitting (microns, ``min_max`` format).
+* ``wave_range``: Wavelength range for fitting (microns, ``[min,max]`` format).
 
 MCMC sampling parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Under ``[MCMC params]``::
 
-    [MCMC params]
-    parallel = True
+    [MCMC_params]
+    parallel = true
     ncpu = 30
-    nsteps = 3000
-    frac_burnin = 0.6
-    fitspot = True
-    fitfac = True
-    fitThet = True
-    fitTphot = True
-    fitlogg_phot = True
-    fitlogg_het = True
-    fitFscale = True
-    fiterrInfl = True
 
-* ``parallel``: Use multiprocessing (``True`` recommended).
+    nsteps=3000
+    frac_burnin = 0.6
+
+    fitspot = true
+    fitfac = true
+
+    fitThet = true
+    fitTphot = true
+
+    fitlogg_phot = true
+    fitlogg_het = true
+
+    fitFscale = true
+    fiterrInfl = true
+
+* ``parallel``: Whether to use multiprocessing (``true`` recommended).
 * ``ncpu``: Number of CPUs for parallel MCMC run.
-* ``nsteps``: Number of steps for each MCMC chain (recommend 5000+ for analysis).
+* ``nsteps``: Number of steps for each MCMC chain (5000+ recommended for analysis).
 * ``frac_burnin``: Fraction of chain steps discarded as burn-in (e.g., ``0.6``).
 * ``fitspot`` / ``fitfac``: Whether to fit spot/faculae covering fractions.
 * ``fitThet`` / ``fitTphot``: Whether to fit spots/faculae/photosphere temperature.
@@ -214,18 +226,19 @@ Priors on the fitted parameters
 Under ``[priors]``::
 
     [priors]
-    gaussparanames = Tphot
-    hyperp_gausspriors = 2566_70
-    fitLogfSpotFac = 0_0
-    hyperp_logpriors = -5_0
+    gaussparanames = "Tphot"
+    hyperp_gausspriors = [2566,70]
 
-* ``gaussparanames``: List of parameters to apply a Gaussian prior (separated by underscores, e.g. ``Tphot_ffac``).
-* ``hyperp_gausspriors``: Mean and std for each Gaussian prior. For multiple parameters separate with a vertical line: e.g. ``mean1_std1|mean2_std2``
+    fitLogfSpotFac = [0,0]
+    hyperp_logpriors = [-5,0]
+
+* ``gaussparanames``: List of parameters to apply a Gaussian prior (e.g. ``["Tphot","ffac"``).
+* ``hyperp_gausspriors``: Mean and std for each Gaussian prior. For multiple parameters: e.g. ``[[mean1,std1],[mean2,std2]]``
 
 * ``fitLogfSpotFac``: Specifies if spot/faculae priors are uniform in linear (toggle ``0``) or log space (toggle ``1``).
-* ``hyperp_logpriors``: Bounds for log-priors (``lowerBound_upperBound``).
+* ``hyperp_logpriors``: Bounds for log-priors (``[lowerBound,upperBound]``).
 
-Beyond the flexibility provided in the ``.ini`` file, you can look up the logic in ``get_param_priors()`` in ``stctm/exotune_utilities.py``.
+Beyond the flexibility provided in the ``.toml`` file, you can look up the logic in ``get_param_priors()`` in ``stctm/exotune_utilities.py``.
 
 Plotting
 ^^^^^^^^
@@ -246,7 +259,7 @@ By default, *exotune* generates and saves the following files to a custom direct
 
 Inputs and recordkeeping:
 
-- Copy of run script, INI file, and ``exotune_utilities.py`` used
+- Copy of run script, TOML file, and ``exotune_utilities.py`` used
 - Figure of the fitted spectrum
 - ``defaultparams`` CSV file with fit initial values
 

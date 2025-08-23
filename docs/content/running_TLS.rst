@@ -226,8 +226,8 @@ First, you can set a Gaussian prior on any of your fitted parameters, using the 
 
 By default (uniform priors on all fitted parameters)::
 
-    gaussparanames =
-    hyperp_gausspriors =
+    gaussparanames = ""
+    hyperp_gausspriors = ""
 
 Otherwise, you can add the name of the parameter(s) for which you want to use a Gaussian prior to ``gaussparanames``, and add a component to ``hyperp_gausspriors`` that specifies the mean and standard deviation of the gaussian parameter to adopt (looks like ``[[mean,std]]`` or `[[mean1,std1],[mean2,std2]]`` for multiple paramters in ``gaussparanames``).
 Here's an example when using a Gaussian prior on the photosphere temperature (recommended, since it is not constrained by the TLSE)::

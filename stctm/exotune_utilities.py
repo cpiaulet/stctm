@@ -37,8 +37,367 @@ import shutil
 import configparser
 import argparse
 from . import stellar_retrieval_utilities as sru
+try:
+    import tomllib as tomli  # Py 3.11+
+except Exception:
+    import tomli             # backwards-compatible
 
 ## Parsing
+
+def convert_to_bool(x):
+    """
+    Convert a value into a boolean.
+
+    Parameters
+    ----------
+    x : Any
+        Value to convert. Can be bool, str, int, or None.
+
+    Returns
+    -------
+    bool
+        Converted boolean value.
+    """
+    if isinstance(x, bool):
+        return x
+    if x is None:
+        return False
+    s = str(x).strip().lower()
+    if s in ("true", "t", "1", "yes", "y"):
+        return True
+    if s in ("false", "f", "0", "no", "n"):
+        return False
+    return bool(x)
+
+
+def parse_range_pair(value, as_type=float):
+    """
+    Normalize a 2-value range into a list [min, max].
+
+    Parameters
+    ----------
+    value : str, list, tuple, or None
+        The range to parse. Can be "a_b", [a, b], (a, b), or None/"".
+
+    as_type : type, optional
+        The type to cast values to (default: float).
+
+    Returns
+    -------
+    list
+        A 2-element list [min, max] of the given type, or [] if empty.
+    """
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        if len(value) != 2:
+            raise ValueError(f"Range must have 2 items, got {value}")
+        return [as_type(value[0]), as_type(value[1])]
+    parts = str(value).split("_")
+    if len(parts) != 2:
+        raise ValueError(f"Could not parse range '{value}'. Expected 'min_max' or [min,max].")
+    return [as_type(parts[0]), as_type(parts[1])]
+
+# table aliases defined for transition from .ini file to .toml file as input
+_TABLE_ALIASES = {
+    "choice of inputs": ("choice of inputs", "choice_of_inputs"),
+    "preprocessing": ("preprocessing",),
+    "saving options": ("saving options", "saving_options"),
+    "stellar params": ("stellar params", "stellar_params"),
+    "stellar models": ("stellar models", "stellar_models"),
+    "MCMC params": ("MCMC params", "MCMC_params"),
+    "priors": ("priors",),
+    "plotting": ("plotting",),
+}
+
+def parse_mask_ranges(v):
+    """
+    Normalize a mask specification into a list of ranges.
+
+    Parameters
+    ----------
+    v : str, list, or None
+        Mask specification. Can be:
+        - "" or None -> []
+        - "a_b|c_d"  -> [[a, b], [c, d]]
+        - [[a, b], [c, d]] -> returned as list of floats
+
+    Returns
+    -------
+    list
+        A list of [min, max] float pairs.
+    """
+    if v in (None, ""):
+        return []
+    if isinstance(v, str):
+        out = []
+        for pair in v.split("|"):
+            pair = pair.strip()
+            if not pair:
+                continue
+            out.append(parse_range_pair(pair, float))
+        return out
+    return [[float(p[0]), float(p[1])] for p in v]
+
+
+def preprocess_gaussians(params):
+    """
+    Pre-normalize Gaussian prior fields so the sru.parse_gaussian_inputs() forwarder
+    receives the shapes it expects.
+
+    Parameters
+    ----------
+    params : dict
+        Parameter dictionary to be mutated in place.
+
+    Returns
+    -------
+    None
+        Mutates 'gaussparanames' and 'hyperp_gausspriors' in params.
+    """
+    # gaussparanames: "", None -> []; "A_B" -> ["A","B"]; list/array -> list
+    names = params.get("gaussparanames")
+    if names in (None, ""):
+        params["gaussparanames"] = []
+    elif isinstance(names, str):
+        params["gaussparanames"] = [n for n in names.split("_") if n != ""]
+    elif isinstance(names, (list, tuple, np.ndarray)):
+        params["gaussparanames"] = list(names)
+    else:
+        raise TypeError(f"Unsupported gaussparanames type: {type(names)}")
+
+    # hyperp_gausspriors: "", None -> [];
+    # "m1_s1|m2_s2" -> [[m1,s1],[m2,s2]];
+    # [m,s] -> [[m,s]];
+    # [[m1,s1],[m2,s2]] -> as-is
+    pri = params.get("hyperp_gausspriors")
+    if pri in (None, ""):
+        params["hyperp_gausspriors"] = []
+    elif isinstance(pri, str):
+        chunks = [c for c in pri.split("|") if c.strip() != ""]
+        params["hyperp_gausspriors"] = [[float(a), float(b)] for (a, b) in
+                                        [p.split("_") for p in chunks]]
+    elif isinstance(pri, (list, tuple)):
+        if len(pri) == 2 and all(isinstance(x, (int, float)) for x in pri):
+            params["hyperp_gausspriors"] = [[float(pri[0]), float(pri[1])]]
+        else:
+            params["hyperp_gausspriors"] = [[float(p[0]), float(p[1])] for p in pri]
+    else:
+        raise TypeError(f"Unsupported hyperp_gausspriors type: {type(pri)}")
+
+
+
+def table_keys(name):
+    """
+    Get all table alias names given a section of the TOML file.
+
+    Parameters
+    ----------
+    name : str
+        Section name (e.g., "saving options").
+
+    Returns
+    -------
+    tuple
+        All possible alias names for that table.
+    """
+    return _TABLE_ALIASES.get(name, (name,))
+
+
+def config_get(cfg, logical_table, key, default=None, required=False):
+    """
+    Unified accessor for config values from INI or TOML.
+
+    Parameters
+    ----------
+    cfg : dict
+        Dictionary of parsed configuration tables.
+
+    logical_table : str
+        Logical table name (e.g., "stellar params"). Underscore/space variants are handled.
+
+    key : str
+        Key to fetch from the table.
+
+    default : Any, optional
+        Default value if the key is missing (default: None).
+
+    required : bool, optional
+        If True, raises an error if the key is missing (default: False).
+
+    Returns
+    -------
+    Any
+        The value from the config or the default.
+    """
+    for t in table_keys(logical_table):
+        if t in cfg and key in cfg[t]:
+            return cfg[t][key]
+    if required:
+        raise KeyError(f"Missing key '{key}' in [{logical_table}]")
+    return default
+
+
+def load_as_dict(path):
+    """
+    Load an INI or TOML config file into a uniform dictionary.
+
+    Parameters
+    ----------
+    path : str
+        Path to the configuration file.
+
+    Returns
+    -------
+    tuple
+        (format, dict) where format is "ini" or "toml", and dict contains sections with keys/values.
+    """
+    ext = (os.path.splitext(path)[1].lower() or "")
+    use_toml = ext in {".toml", ".tml", ".tom"}
+
+    if use_toml:
+        with open(path, "rb") as f:
+            data = tomli.load(f)
+        return "toml", data
+
+    cp = configparser.ConfigParser()
+    cp.read(path)
+    sections = {}
+    for sec in cp.sections():
+        sections[sec] = {k: v for k, v in cp.items(sec)}
+    return "ini", sections
+
+
+def parse_all_input_exotune_iniFile(config_path):
+    """
+    Parse an INI or TOML configuration file and command-line style arguments into a parameter dictionary.
+
+    This function provides backward compatibility for INI files while supporting
+    the newer TOML format. Command-line arguments override values from the config file.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the configuration file (.ini or .toml).
+
+    Returns
+    -------
+    tuple
+        - params : dict
+            Dictionary of parameter names and values, normalized for downstream use.
+        - label_run : str
+            A label string describing the run, built from selected parameters.
+    """
+    fmt, cfg = load_as_dict(config_path)
+
+    # ---- Argparse with defaults from config ----
+    parser = argparse.ArgumentParser(description='Inputs for stellar contamination retrieval.')
+
+    # [choice of inputs]
+    parser.add_argument('-label_obs', default=config_get(cfg, 'choice of inputs', 'label_obs'))
+    parser.add_argument('-start_from_timeseries',
+                        type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'choice of inputs', 'start_from_timeseries')))
+    parser.add_argument('-save_median_spectrum',
+                        type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'choice of inputs', 'save_median_spectrum')))
+    parser.add_argument('-path_save_median_spectrum',
+                        default=config_get(cfg, 'choice of inputs', 'path_save_median_spectrum', default=""))
+    parser.add_argument('-path_to_stellar_spec_ts',
+                        default=config_get(cfg, 'choice of inputs', 'path_to_stellar_spec_ts', default=""))
+    parser.add_argument('-path_to_spec', default=config_get(cfg, 'choice of inputs', 'path_to_spec'))
+    parser.add_argument('-spec_format', default=config_get(cfg, 'choice of inputs', 'spec_format'))
+    parser.add_argument('-stmodfile', default=config_get(cfg, 'choice of inputs', 'stmodfile'))
+
+    # [preprocessing]
+    parser.add_argument('-optimize_param', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'preprocessing', 'optimize_param')))
+    parser.add_argument('-obsmaskpattern', default=config_get(cfg, 'preprocessing', 'obsmaskpattern'))
+    parser.add_argument('-kern_size', default=config_get(cfg, 'preprocessing', 'kern_size', default=""))
+    parser.add_argument('-jd_range_mask', default=config_get(cfg, 'preprocessing', 'jd_range_mask', default=""))
+    parser.add_argument('-wave_range_mask', default=config_get(cfg, 'preprocessing', 'wave_range_mask', default=""))
+
+    # [saving options]
+    parser.add_argument('-save_fit', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'saving options', 'save_fit')))
+    parser.add_argument('-res_suffix', default=config_get(cfg, 'saving options', 'res_suffix'))
+
+    # [stellar params]
+    parser.add_argument('-Teffstar', type=float, default=float(config_get(cfg, 'stellar params', 'Teffstar')))
+    parser.add_argument('-feh', type=float, default=float(config_get(cfg, 'stellar params', 'feh')))
+    parser.add_argument('-loggstar', type=float, default=float(config_get(cfg, 'stellar params', 'loggstar')))
+    parser.add_argument('-logg_phot_source', default=config_get(cfg, 'stellar params', 'logg_phot_source'))
+    parser.add_argument('-logg_phot_value', type=float, default=float(config_get(cfg, 'stellar params', 'logg_phot_value')))
+
+    # [stellar models]
+    parser.add_argument('-label_grid', default=config_get(cfg, 'stellar models', 'label_grid'))
+    parser.add_argument('-logg_range', default=config_get(cfg, 'stellar models', 'logg_range'))
+    parser.add_argument('-loggstep', type=float, default=float(config_get(cfg, 'stellar models', 'loggstep')))
+    parser.add_argument('-Teff_range', default=config_get(cfg, 'stellar models', 'Teff_range'))
+    parser.add_argument('-Teffstep', type=float, default=float(config_get(cfg, 'stellar models', 'Teffstep')))
+    parser.add_argument('-resPower_target', type=int, default=int(config_get(cfg, 'stellar models', 'resPower_target')))
+    parser.add_argument('-wave_range', default=config_get(cfg, 'stellar models', 'wave_range'))
+
+    # [MCMC params]
+    parser.add_argument('-parallel', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'MCMC params', 'parallel')))
+    parser.add_argument('-ncpu', type=int, default=int(config_get(cfg, 'MCMC params', 'ncpu')))
+    parser.add_argument('-nsteps', type=int, default=int(config_get(cfg, 'MCMC params', 'nsteps')))
+    parser.add_argument('-frac_burnin', type=float, default=float(config_get(cfg, 'MCMC params', 'frac_burnin')))
+    # fitFscale is your original; accept fitDscale alias from your other module
+    fitFscale_default = config_get(cfg, 'MCMC params', 'fitFscale')
+    if fitFscale_default is None:
+        fitFscale_default = config_get(cfg, 'MCMC params', 'fitDscale')  # alias
+    parser.add_argument('-fitFscale', type=convert_to_bool, default=convert_to_bool(fitFscale_default))
+    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fiterrInfl']:
+        parser.add_argument(f'-{param}', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'MCMC params', param)))
+
+    # [priors]
+    parser.add_argument('-gaussparanames', default=config_get(cfg, 'priors', 'gaussparanames', default=""))
+    parser.add_argument('-hyperp_gausspriors', default=config_get(cfg, 'priors', 'hyperp_gausspriors', default=""))
+    parser.add_argument('-fitLogfSpotFac', default=config_get(cfg, 'priors', 'fitLogfSpotFac', default=""))
+    parser.add_argument('-hyperp_logpriors', default=config_get(cfg, 'priors', 'hyperp_logpriors', default=""))
+
+    # [plotting]
+    parser.add_argument('-pad', type=float, default=float(config_get(cfg, 'plotting', 'pad')))
+    parser.add_argument('-target_resP', type=int, default=int(config_get(cfg, 'plotting', 'target_resP')))
+
+    # ---- CLI override parse ----
+    args, _unknown = parser.parse_known_args()
+    params = deepcopy(vars(args))
+
+    # ---------- Normalization (works for INI strings and TOML arrays) ----------
+    # masks
+    for k in ("jd_range_mask", "wave_range_mask"):
+        params[k] = parse_mask_ranges(params[k])
+
+    # ranges
+    params["logg_range"] = parse_range_pair(params["logg_range"], float)
+    if isinstance(params["Teff_range"], str) and params["Teff_range"].lower() == "default":
+        params["Teff_range"] = [np.max([params["Teffstar"] - 1000.0, 2300.0]), params["Teffstar"] + 1000.0]
+    else:
+        params["Teff_range"] = parse_range_pair(params["Teff_range"], float)
+    params["wave_range"] = parse_range_pair(params["wave_range"], float)
+
+    # gaussian priors: minimal pre-normalization, then delegate to sru.parse_gaussian_inputs
+    preprocess_gaussians(params)
+    names, priors = parse_gaussian_inputs(params)
+    params["gaussparanames"], params["hyperp_gausspriors"] = names, priors
+
+    # fitLogfSpotFac / hyperp_logpriors -> lists of length 2
+    params["fitLogfSpotFac"] = parse_range_pair(params["fitLogfSpotFac"], int)
+    params["hyperp_logpriors"] = parse_range_pair(params["hyperp_logpriors"], float)
+
+    # kern_size
+    if params["kern_size"] in (None, "", []):
+        params["kern_size"] = None
+    else:
+        params["kern_size"] = int(params["kern_size"])
+
+    # parallel guard
+    if params["parallel"] is False:
+        params["ncpu"] = 1
+
+    # label
+    label_run = f"Obs_{params['label_obs']}_Mod_{params['label_grid']}_Mask{params['obsmaskpattern']}"
+
+    print("\nDone with parsing!")
+    return params, label_run
 
 
 def parse_gaussian_inputs(input_para):
@@ -55,217 +414,7 @@ def parse_gaussian_inputs(input_para):
     """
     return sru.parse_gaussian_inputs(input_para)
 
-def parse_all_input_exotune_iniFile(iniFile):
-    """
-    Parse an INI configuration file and command-line style arguments into a parameter dictionary.
 
-    Parameters
-    ----------
-    iniFile : str
-        Path to the INI configuration file
-
-    Returns
-    -------
-    params : dict
-        A dictionary where keys are parameter names and values are parsed from the INI file.
-        This dictionary can be used directly in downstream modeling and fitting code (after a bit of further parsing).
-    """
-
-    config = configparser.ConfigParser()
-    config.read(iniFile)
-
-    print('\nReading in the inputs...')
-
-    parser = argparse.ArgumentParser(description='Inputs for stellar contamination retrieval.')
-
-    def safe_get(section, key, val_type=str):
-        """
-        Safely retrieve and cast a value from a ConfigParser object.
-
-        This function attempts to fetch a value from a given section and key in an
-        INI configuration file and cast it to the desired type. If the key is missing,
-        it returns None. If casting fails, it falls back to returning the raw string.
-
-        Parameters
-        ----------
-        section : str
-            The section in the INI file to look for the key.
-        key : str
-            The specific key to retrieve within the section.
-        val_type : type, optional
-            The desired type to cast the value to. Supported types are: str, int, float,
-            bool.
-
-        Returns
-        -------
-        value : Any or None
-            The value from the INI file, cast to the specified type if possible.
-            Returns None if the key is not found.
-        """
-
-        if not config.has_option(section, key):
-            return None
-        value = config.get(section, key)
-        try:
-            if val_type == bool:
-                return config.getboolean(section, key)
-            elif val_type == int:
-                return config.getint(section, key)
-            elif val_type == float:
-                return config.getfloat(section, key)
-            else:
-                return value
-        except ValueError:
-            return value
-
-    # [choice of inputs]
-    parser.add_argument('-label_obs', default=safe_get('choice of inputs', 'label_obs'),
-                        help='Label for the current set of observations')
-    parser.add_argument('-start_from_timeseries', type=bool,
-                        default=safe_get('choice of inputs', 'start_from_timeseries', bool),
-                        help='Whether to start from a time series of spectra (True) or from a single spectrum file (False)')
-    parser.add_argument('-save_median_spectrum', type=bool,
-                        default=safe_get('choice of inputs', 'save_median_spectrum', bool),
-                        help='Whether to save to file the median spectrum created from the time series')
-    parser.add_argument('-path_save_median_spectrum',
-                        default=safe_get('choice of inputs', 'path_save_median_spectrum'),
-                        help='Path to save the median spectrum to')
-    parser.add_argument('-path_to_stellar_spec_ts',
-                        default=safe_get('choice of inputs', 'path_to_stellar_spec_ts'),
-                        help='Path to stellar spectrum time series (e.g., Eureka! output)')
-    parser.add_argument('-path_to_spec', default=safe_get('choice of inputs', 'path_to_spec'),
-                        help='Path to spectrum file (used if not starting from a time series)')
-    parser.add_argument('-spec_format', default=safe_get('choice of inputs', 'spec_format'),
-                        help='Spectrum format (options implemented: "MR_csv", "basic")')
-    parser.add_argument('-stmodfile', default=safe_get('choice of inputs', 'stmodfile'),
-                        help='Stellar models grid file path')
-
-    # [preprocessing]
-    parser.add_argument('-optimize_param', type=bool, default=safe_get('preprocessing', 'optimize_param', bool),
-                        help='Whether to stop after initial processing instead of running MCMC')
-    parser.add_argument('-obsmaskpattern', default=safe_get('preprocessing', 'obsmaskpattern'),
-                        help='Label for time/wavelength mask pattern (e.g., "avoidflares")')
-    parser.add_argument('-kern_size', default=safe_get('preprocessing', 'kern_size'),
-                        help='Kernel size for median-filtered light curve (for plotting)')
-    parser.add_argument('-jd_range_mask', default=safe_get('preprocessing', 'jd_range_mask'),
-                        help='JD ranges to mask when building spectrum (format: start1_end1|start2_end2...)')
-    parser.add_argument('-wave_range_mask', default=safe_get('preprocessing', 'wave_range_mask'),
-                        help='Wavelength ranges to mask (same format as jd_range_mask)')
-
-    # [saving options]
-    parser.add_argument('-save_fit', type=bool, default=safe_get('saving options', 'save_fit', bool),
-                        help='Whether to save the fit results')
-    parser.add_argument('-res_suffix', default=safe_get('saving options', 'res_suffix'),
-                        help='Suffix for all output result files')
-
-    # [stellar params]
-    parser.add_argument('-Teffstar', type=float, default=safe_get('stellar params', 'Teffstar', float),
-                        help='Effective temperature of the star in Kelvin')
-    parser.add_argument('-feh', type=float, default=safe_get('stellar params', 'feh', float),
-                        help='Metallicity [Fe/H] of the star')
-    parser.add_argument('-loggstar', type=float, default=safe_get('stellar params', 'loggstar', float),
-                        help='Log surface gravity (log g) of the star in cgs units')
-    parser.add_argument('-logg_phot_source', default=safe_get('stellar params', 'logg_phot_source'),
-                        help='Source for default photospheric log g ("value" or "loggstar")')
-    parser.add_argument('-logg_phot_value', type=float,
-                        default=safe_get('stellar params', 'logg_phot_value', float),
-                        help='Value of default photospheric log g if "value" is used')
-
-    # [stellar models]
-    parser.add_argument('-label_grid', default=safe_get('stellar models', 'label_grid'),
-                        help='Label for the stellar model grid')
-    parser.add_argument('-logg_range', default=safe_get('stellar models', 'logg_range'),
-                        help='Range of log g values for the grid (format: min_max)')
-    parser.add_argument('-loggstep', type=float, default=safe_get('stellar models', 'loggstep', float),
-                        help='Step size for log g grid in cgs')
-    parser.add_argument('-Teff_range', default=safe_get('stellar models', 'Teff_range'),
-                        help='Effective temperature range ("default" or min_max)')
-    parser.add_argument('-Teffstep', type=float, default=safe_get('stellar models', 'Teffstep', float),
-                        help='Step size for Teff grid in Kelvin')
-    parser.add_argument('-resPower_target', type=int,
-                        default=safe_get('stellar models', 'resPower_target', int),
-                        help='Resolving power at which the model grid was computed')
-    parser.add_argument('-wave_range', default=safe_get('stellar models', 'wave_range'),
-                        help='Wavelength range for model grid (format: minwave_maxwave)')
-
-    # [MCMC params]
-    parser.add_argument('-parallel', type=bool, default=safe_get('MCMC params', 'parallel', bool),
-                        help='Run MCMC in parallel using multiple CPUs')
-    parser.add_argument('-ncpu', type=int, default=safe_get('MCMC params', 'ncpu', int),
-                        help='Number of CPUs to use for MCMC')
-    parser.add_argument('-nsteps', type=int, default=safe_get('MCMC params', 'nsteps', int),
-                        help='Number of MCMC steps')
-    parser.add_argument('-frac_burnin', type=float, default=safe_get('MCMC params', 'frac_burnin', float),
-                        help='Fraction of chains to discard as burn-in')
-
-    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fitFscale',
-                  'fiterrInfl']:
-        parser.add_argument(f'-{param}', type=bool, default=safe_get('MCMC params', param, bool),
-                            help=f'Whether to fit {param}')
-
-    # [priors]
-    parser.add_argument('-gaussparanames', default=safe_get('priors', 'gaussparanames'),
-                        help='List of parameters with Gaussian priors (e.g., Tphot_ffac)')
-    parser.add_argument('-hyperp_gausspriors', default=safe_get('priors', 'hyperp_gausspriors'),
-                        help='Means and stds for Gaussian priors (e.g., mean1_std1|mean2_std2)')
-    parser.add_argument('-fitLogfSpotFac', default=safe_get('priors', 'fitLogfSpotFac'),
-                        help='Flags for log/linear prior on fspot/ffac: 0 for lin, 1 for log (e.g., 0_0)')
-    parser.add_argument('-hyperp_logpriors', default=safe_get('priors', 'hyperp_logpriors'),
-                        help='Prior bounds on heterogeneity fractions if using log prior (e.g., -5_0)')
-
-    # [plotting]
-    parser.add_argument('-pad', type=float, default=safe_get('plotting', 'pad', float),
-                        help='Padding in microns for plotting spectrum')
-    parser.add_argument('-target_resP', type=int, default=safe_get('plotting', 'target_resP', int),
-                        help='Target resolving power used to smooth models for plotting')
-
-    # Parse and return
-    args, unknown = parser.parse_known_args()
-
-    params = deepcopy(args.__dict__)
-
-    # -- Do further parsing for params that aren't as easy to read in from the ini file
-
-    # Preprocessing
-    for para_to_parse in ["jd_range_mask", "wave_range_mask"]:
-        if params[para_to_parse] == "":
-            params[para_to_parse] = []
-        else:
-            params[para_to_parse] = [sru.parse_range_string(pair) for pair in params[para_to_parse].split('|')]
-
-    # Stellar models grid
-    params["logg_range"] = sru.parse_range_string(params["logg_range"])
-
-    if params["Teff_range"] == "default":
-        params["Teff_range"] = [np.max([params["Teffstar"]-1000., 2300.]),
-                                params["Teffstar"] + 1000.]
-    else:
-        params["Teff_range"] = sru.parse_range_string(params["Teff_range"])
-
-    params["wave_range"] = sru.parse_range_string(params["wave_range"])
-
-    # Setup of priors
-    res = parse_gaussian_inputs(params)
-    params["gaussparanames"] = res[0]
-    params["hyperp_gausspriors"] = res[1]
-
-    params["fitLogfSpotFac"] = sru.parse_range_string(params["fitLogfSpotFac"], as_type=int)
-    params["hyperp_logpriors"] = sru.parse_range_string(params["hyperp_logpriors"])
-
-    # create the label for the run
-    label_run = ""
-    label_run = label_run + "Obs_"+params["label_obs"] + "_Mod_" + params["label_grid"]
-    label_run = label_run + "_Mask" + params["obsmaskpattern"]
-    if len(params["kern_size"])==0:
-        params["kern_size"] = None
-    else:
-        params["kern_size"] = int(params["kern_size"])
-
-    if params["parallel"] is False:
-        params["ncpu"] = 1 # overwrite
-    print("\nDone with parsing!")
-
-    return params, label_run
 
 ## Pre-processing
 
