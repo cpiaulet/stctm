@@ -11,7 +11,7 @@ tags:
 authors:
   - name: Caroline Piaulet-Ghorayeb
     orcid: 0000-0002-2875-917X
-    affiliation: 1,2
+    affiliation: "1,2"
 affiliations:
   - name: Department of Astronomy \& Astrophysics, University of Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA
     index: 1
@@ -24,17 +24,18 @@ bibliography: paper.bib
 
 # Summary
 
-Transmission spectroscopy is the most promising method for the near-term study of small-planet atmospheres and the search for atmospheres on temperate rocky worlds.
-At the same time, the small planets that are most amenable for such atmospheric probes orbit small M dwarf stars, which challenge transmission spectroscopy studies via "stellar contamination", or the transit light source effect (TLSE).
-Specifically, the TLSE describes the fact that spectral contrasts between bright and dark spots at the stellar surface can leave wavelength-dependent imprints in transmission spectra that may be mistaken for planetary atmosphere absorption.  
+Transmission spectroscopy is a key avenue for the near-term study of small-planet atmospheres and the most promising method when it comes to searching for atmospheres on temperate rocky worlds, which are often too cold for planetary emission to be detectable.
+At the same time, the small planets that are most amenable for such atmospheric probes orbit small M dwarf stars. This "M-dwarf opportunity" has encountered a major challenge because of late-type stars' magnetic activity, which lead to the formation of spots and faculae at their surface. 
+If inhomogeneously distributed throughout the photosphere, this phenomenon can give rise to "stellar contamination", or the transit light source effect (TLSE).
+Specifically, the TLSE describes the fact that spectral contrasts between bright and dark spots at the stellar surface outside of the transit chord can leave wavelength-dependent imprints in transmission spectra that may be mistaken for planetary atmosphere absorption.  
 
 As the field becomes increasingly ambitious in the search for signs of even thin atmospheres on small exoplanets, the TLSE is becoming a limiting factor, and it becomes imperative to develop robust inference methods to disentangle planetary and stellar contributions to the observed spectra.
 Here, I present `stctm`, a flexible Bayesian retrieval framework to model the impact of the TLSE on any exoplanet transmission spectrum, and infer the range of stellar surface parameters that are compatible with the observations in the absence of any planetary contribution. 
-With the `exotune` sub-module, users can also perform retrievals directly on out-of-transit stellar spectra in order to constrain the extent to which the TLSE can impact any planet's transmission spectrum.
-The input data formats, stellar models, and fitted parameters are easily tunable to the needs of the user and the code is fully parallelized to enable fast inferences. 
+With the `exotune` sub-module, users can also perform retrievals directly on out-of-transit stellar spectra in order to place data-driven priors on the extent to which the TLSE can impact any planet's transmission spectrum.
+The input data formats, stellar models, and fitted parameters are easily tunable using human-readable files and the code is fully parallelized to enable fast inferences. 
 
 # Statement of need
-The interpretation of high-precision exoplanet transmission spectra facilities like the Hubble Space Telescope (HST) and the James Webb Space Telescope (JWST) is increasingly dependent on a robust accounting for the effects of stellar contamination, particularly for small planets orbiting small stars. Despite a growing awareness of the Transit Light Source Effect (TLSE; [@Rackham:2018; @TRAPPIST1_JWST_2024]), the community currently lacks flexible, open-source tools that allow for robust modeling and retrieval of stellar contamination signatures.
+The interpretation of high-precision exoplanet transmission spectra from facilities such as the Hubble Space Telescope (HST) and the James Webb Space Telescope (JWST) is increasingly dependent on a robust accounting for the effects of stellar contamination, particularly for small planets orbiting small stars. Despite a growing awareness of the Transit Light Source Effect (TLSE; [@Rackham:2018; @TRAPPIST1_JWST_2024]), the community currently lacks flexible, open-source tools that allow for robust modeling and retrieval of stellar contamination signatures.
 Further, uncertainties in stellar models motivate flexible implementations with reproducible model setups supporting any user-specified stellar model source, such as PHOENIX or SPHINX model grids [@Husser:2013; @Iyer:2023].
 
 While some forward models have been developed to simulate the impact of stellar heterogeneity on transmission spectra, these tools are either not publicly available, computationally intractable due to their serial-mode-only implementation, part of much larger codes that require more advanced user training (e.g. atmospheric retrievals), or not designed for inference. Further, the community lacks frameworks that enable to retrieve stellar surface properties from both observed planetary transmission spectra and out-of-transit stellar spectra in a Bayesian context. This gap limits our ability to quantify uncertainties in exoplanet atmospheric properties and to test the robustness of atmospheric detections.
@@ -61,10 +62,10 @@ The full documentation for `stctm` with installation, testing instructions, and 
 A description of `stctm` can be found in several of the early papers that employed it (see next section).
 
 # Uses of STCTM in the literature
-`stctm` has been applied widely to the interpretation of transmission spectra of rocky planets and small sub-Neptunes, including in [@Lim2023; @Roy:2023; @PiauletGhorayeb:2024; @Radica:2025; @Ahrer:2025].
+`stctm` has been applied widely to the interpretation of transmission spectra of rocky planets and small sub-Neptunes, including in [@Lim2023; @Roy:2023; @PiauletGhorayeb:2024; @Radica:2025; @Ahrer:2025; @PiauletGhorayeb:2025].
 
 # Future Developments
-The latest version of `stctm` at the time of writing (v2.0.1) supports MCMC retrievals on transmission spectra and on out-of-transit stellar spectra (`exotune`), and provides model comparison statistics, model and parameter samples as well as publication-ready figures. 
+The latest version of `stctm` at the time of writing (v2.0.2) supports MCMC retrievals on transmission spectra and on out-of-transit stellar spectra (`exotune`), and provides model comparison statistics, model and parameter samples as well as publication-ready figures. 
 Future versions will expand on these functionalities to include user-friendly scripts tailored to post-processing only for an already-run retrieval (creating custom plots), as well as a Nested Sampling alternative for the retrievals.
 Users are encouraged to propose or contribute any other features.
 
@@ -72,7 +73,7 @@ Users are encouraged to propose or contribute any other features.
 Here are a few open-source codes that offer functionalities focused on retrievals of the TLSE or on out-of-transit stellar spectra:
 
 - Generic atmospheric retrievals (including TLSE-only retrievals on transmission spectra): `POSEIDON` [@poseidon]
-- Retrievals on out-of-transit stellar spectra (Nested Sampling): `StellarFit` [@StellarFit]
+- Retrievals on out-of-transit stellar spectra (Nested Sampling, serial run mode only): `StellarFit` [@Radica:2025]
 
 # Acknowledgements
 `stctm` relies heavily on other Python libraries which include `numpy` [@harris2020array], `scipy` [@2020SciPy-NMeth], `astropy` [@astropy:2013; @astropy:2018], `matplotlib` [@Hunter:2007], `pandas`[@pandas:2020], `emcee`[@ForemanMackey:2013], `corner` [@corner], and `pysynphot` [@pysynphot]. 

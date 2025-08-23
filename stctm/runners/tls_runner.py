@@ -38,6 +38,7 @@ import stctm.stellar_retrieval_utilities as sru
 import stctm.exotune_utilities as xtu
 
 import matplotlib.gridspec as gridspec
+from pathlib import Path
 
 
 ## The main code starts here
@@ -81,7 +82,6 @@ def main(argv):
 
     ## Load observed spectrum
     spec = ptspec.TransSpec(params["path_to_spec"], inputtype=params["spec_format"])
-    # pdb.set_trace()
 
 
     ## Prepare for MCMC
@@ -91,7 +91,6 @@ def main(argv):
 
         param, fitparanames = sru.init_default_and_fitted_param_fromDict(params,
                                                             Dscale_guess=np.median(spec["yval"]))
-
         print("\n** Fitparanames:", fitparanames)
         print("\n** Param: ", param)
 
@@ -100,29 +99,41 @@ def main(argv):
 
         runname = "fit"
         for p in fitparanames:
-            runname = runname + "_"+p
-        runname = runname + "_"+ params["res_suffix"]
-        results_folder = "../../stellar_contamination_results/"+runname+"/"
-        print("Results folder:", results_folder)
+            runname = runname + "_" + p
+        runname = runname + "_" + params["res_suffix"]
 
-        # Setup for post-processing
+        # --- NEW: base everything off the INI file location ---
+        ini_path = Path(iniFile).resolve()
+        ini_dir = ini_path.parent
 
-        if not os.path.isdir(results_folder):
-           os.makedirs(results_folder)
+        # ../../stellar_contamination_results/ starting from
+        # stellar_contamination_analysis/your_analysis_path/
+        results_root = (ini_dir / "../../stellar_contamination_results").resolve()
 
-        this_dir = os.getcwd() + "/"
-        res_dir = os.sep.join(__file__.split(os.sep)[:-2]) + "/../stellar_contamination_results/" + runname + "/"
-        utils_script = str(sru.__file__)
+        results_folder = (results_root / runname)
+        print("Results folder:", str(results_folder))
 
-        this_script = __file__.split(os.sep)[-1]
+        results_folder.mkdir(parents=True, exist_ok=True)
+        res_dir = str(results_folder) + os.sep
 
-        sru.save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir)
+        # give save_ref_files full paths
+        this_script_path = Path(__file__).resolve()
+        utils_script_path = Path(sru.__file__).resolve()
+
+        # Hand full paths to save_ref_files
+        this_dir = ""
+        this_script = str(this_script_path)  #
+        iniFile_fp = str(Path(iniFile).resolve())  #
+        utils_script = str(utils_script_path)  # full path to utilities module
+
+        # Now call exactly once
+        sru.save_ref_files(this_dir, this_script, iniFile_fp, utils_script, res_dir)
 
         print("Plotting fitted spectrum...")
 
         # plot spectrum
         fig, ax = spec.plot()
-        fig.savefig(results_folder + "stctm_fitted_spectrum.pdf")
+        fig.savefig(str(results_folder / "stctm_fitted_spectrum.pdf"))
 
         # define parameters for emcee run
         print("Setting up MCMC...")
@@ -191,12 +202,14 @@ def main(argv):
     print("\n** Fitparanames:", fitparanames)
     print("\n** Param: ", param)
 
+    results_folder = str(results_root / runname) + os.sep
+
     if 1: # chainplot
 
 
         fig, axes = sru.chainplot(sampler.chain[:, burnin:, :], labels=fitparanames)
         if params["save_fit"]:
-            fig.savefig(results_folder + "stctm_chainplot_noburnin_"+runname+'.png')
+            fig.savefig(results_folder+ "stctm_chainplot_noburnin_"+runname+'.png')
 
         fig, axes = sru.chainplot(sampler.chain[:, :, :], labels=fitparanames)
         if params["save_fit"]:
@@ -235,12 +248,13 @@ def main(argv):
             ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
 
             if params["save_fit"]:
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.png')
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.pdf')
+                fig.savefig(results_folder+ "stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.png')
+                fig.savefig(results_folder +"stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.pdf')
+
             sru.xspeclog(ax,level=1)
             if params["save_fit"]:
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.png')
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.pdf')
+                fig.savefig(results_folder+ "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.png')
+                fig.savefig(results_folder+ "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.pdf')
 
 
         else:
@@ -258,12 +272,12 @@ def main(argv):
             ax.set_xlim(np.min(spec["waveMin"])-params["pad"]/2, np.max(spec["waveMax"])+params["pad"])
 
             if params["save_fit"]:
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.png')
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.pdf')
+                fig.savefig(results_folder +"stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.png')
+                fig.savefig(results_folder +"stctm_resP"+str(params["target_resP"])+"_1_2_3sigma_"+runname+'.pdf')
             sru.xspeclog(ax,level=1)
             if params["save_fit"]:
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.png')
-                fig.savefig(results_folder + "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.pdf')
+                fig.savefig(results_folder+ "stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.png')
+                fig.savefig(results_folder +"stctm_resP"+str(params["target_resP"])+"_logwave_1_2_3sigma_"+runname+'.pdf')
 
 
 
@@ -273,7 +287,7 @@ def main(argv):
 
         suffix = "_custom"
         if params["save_fit"]:
-            fig.savefig(results_folder+"stctm_corner_bestfit_"+runname+suffix+".pdf")
+            fig.savefig(results_folder+ "stctm_corner_bestfit_"+runname+suffix+".pdf")
 
     ## Save blobs + plot best fit
     if 1:
@@ -287,12 +301,11 @@ def main(argv):
         if params["save_fit"]:
             np.save(results_folder+"st_ctm_model_blobs_"+runname+".npy", flat_st_ctm_models)
 
-
         fig, ax = sru.plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob,
                                                ind_bestfit, fitparanames, flat_st_ctm_models, pad=params["pad"])
 
         if params["save_fit"]:
-            fig.savefig(results_folder+"stctm_bestfit_model_with_obs_"+runname+".png")
+            fig.savefig(results_folder + "stctm_bestfit_model_with_obs_"+runname+".png")
 
         sru.save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_st_ctm_models,
                                results_folder, runname, save_fit=params["save_fit"])
@@ -317,10 +330,10 @@ def main(argv):
         ax.set_ylim(0.8*np.median(spec['yval']), 1.15*np.median(spec['yval']))
 
         if params["save_fit"]:
-            fig.savefig(results_folder+"stctm_1_2_3_sigma_"+runname+".pdf")
+            fig.savefig(results_folder+ "stctm_1_2_3_sigma_"+runname+".pdf")
 
         if params["save_fit"]:
-            fig.savefig(results_folder+"stctm_1_2_3_sigma_"+runname+".png")
+            fig.savefig(results_folder +"stctm_1_2_3_sigma_"+runname+".png")
 
 
     ## plot 1,2,3 sigma with the amplitude of stellar contamination
@@ -351,43 +364,24 @@ def main(argv):
 
         ax2.set_ylim(ymin=0)
         if params["save_fit"]:
-            fig.savefig(results_folder+"stctm_1_2_3_sigma_withamplitude_noprint"+runname+".pdf")
+            fig.savefig(results_folder+ "stctm_1_2_3_sigma_withamplitude_noprint"+runname+".pdf")
 
 
 ##
 if __name__ == "__main__":
     main(sys.argv)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## CLI add-on
+# small convenience wrapper
+def run_from_ini(ini_path = None):
+    """
+    Entry point equivalent to:
+        python stellar_retrieval_runfile.py <ini_file.ini>
+    """
+    argv = ["stctm_TLS"]
+    if ini_path:
+        argv.append(ini_path)
+    return int(main(argv) or 0)
 
 
 

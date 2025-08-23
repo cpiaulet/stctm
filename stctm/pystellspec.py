@@ -65,10 +65,12 @@ class StellSpec(Table):
     def remDataByIndex(self, ind):
         """
         Remove entries at the specified index/indices.
+
         Parameters
         ----------
         ind : int or array-like
             Index or indices of the data points to remove from the spectrum.
+
         Notes
         -----
         This method updates all relevant attributes, including wavelength,

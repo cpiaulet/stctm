@@ -36,278 +36,385 @@ import shutil
 
 import configparser
 import argparse
+from . import stellar_retrieval_utilities as sru
+try:
+    import tomllib as tomli  # Py 3.11+
+except Exception:
+    import tomli             # backwards-compatible
 
 ## Parsing
 
-def parse_range_string(s, as_type=float):
+def convert_to_bool(x):
     """
-    Convert a string representing two numeric values into a list.
+    Convert a value into a boolean.
 
     Parameters
     ----------
-    s : str
-        A string with two numeric values separated by an underscore (e.g., "1.4_5.4").
+    x : Any
+        Value to convert. Can be bool, str, int, or None.
+
+    Returns
+    -------
+    bool
+        Converted boolean value.
+    """
+    if isinstance(x, bool):
+        return x
+    if x is None:
+        return False
+    s = str(x).strip().lower()
+    if s in ("true", "t", "1", "yes", "y"):
+        return True
+    if s in ("false", "f", "0", "no", "n"):
+        return False
+    return bool(x)
+
+
+def parse_range_pair(value, as_type=float):
+    """
+    Normalize a 2-value range into a list [min, max].
+
+    Parameters
+    ----------
+    value : str, list, tuple, or None
+        The range to parse. Can be "a_b", [a, b], (a, b), or None/"".
+
     as_type : type, optional
-        The type to cast the values to, either `float` (default) or `int`.
+        The type to cast values to (default: float).
 
     Returns
     -------
     list
-        A list containing the two values, cast to the specified type.
-
+        A 2-element list [min, max] of the given type, or [] if empty.
     """
-    return [as_type(x) for x in s.split('_')]
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        if len(value) != 2:
+            raise ValueError(f"Range must have 2 items, got {value}")
+        return [as_type(value[0]), as_type(value[1])]
+    parts = str(value).split("_")
+    if len(parts) != 2:
+        raise ValueError(f"Could not parse range '{value}'. Expected 'min_max' or [min,max].")
+    return [as_type(parts[0]), as_type(parts[1])]
 
-def parse_gaussian_inputs(input_para):
+# table aliases defined for transition from .ini file to .toml file as input
+_TABLE_ALIASES = {
+    "choice of inputs": ("choice of inputs", "choice_of_inputs"),
+    "preprocessing": ("preprocessing",),
+    "saving options": ("saving options", "saving_options"),
+    "stellar params": ("stellar params", "stellar_params"),
+    "stellar models": ("stellar models", "stellar_models"),
+    "MCMC params": ("MCMC params", "MCMC_params"),
+    "priors": ("priors",),
+    "plotting": ("plotting",),
+}
+
+def parse_mask_ranges(v):
     """
-    Parse Gaussian parameter names and corresponding hyperparameter priors.
+    Normalize a mask specification into a list of ranges.
 
     Parameters
     ----------
-    input_para : dict
-        dictionary of input parameters
+    v : str, list, or None
+        Mask specification. Can be:
+        - "" or None -> []
+        - "a_b|c_d"  -> [[a, b], [c, d]]
+        - [[a, b], [c, d]] -> returned as list of floats
+
+    Returns
+    -------
+    list
+        A list of [min, max] float pairs.
+    """
+    if v in (None, ""):
+        return []
+    if isinstance(v, str):
+        out = []
+        for pair in v.split("|"):
+            pair = pair.strip()
+            if not pair:
+                continue
+            out.append(parse_range_pair(pair, float))
+        return out
+    return [[float(p[0]), float(p[1])] for p in v]
+
+
+def preprocess_gaussians(params):
+    """
+    Pre-normalize Gaussian prior fields so the sru.parse_gaussian_inputs() forwarder
+    receives the shapes it expects.
+
+    Parameters
+    ----------
+    params : dict
+        Parameter dictionary to be mutated in place.
+
+    Returns
+    -------
+    None
+        Mutates 'gaussparanames' and 'hyperp_gausspriors' in params.
+    """
+    # gaussparanames: "", None -> []; "A_B" -> ["A","B"]; list/array -> list
+    names = params.get("gaussparanames")
+    if names in (None, ""):
+        params["gaussparanames"] = []
+    elif isinstance(names, str):
+        params["gaussparanames"] = [n for n in names.split("_") if n != ""]
+    elif isinstance(names, (list, tuple, np.ndarray)):
+        params["gaussparanames"] = list(names)
+    else:
+        raise TypeError(f"Unsupported gaussparanames type: {type(names)}")
+
+    # hyperp_gausspriors: "", None -> [];
+    # "m1_s1|m2_s2" -> [[m1,s1],[m2,s2]];
+    # [m,s] -> [[m,s]];
+    # [[m1,s1],[m2,s2]] -> as-is
+    pri = params.get("hyperp_gausspriors")
+    if pri in (None, ""):
+        params["hyperp_gausspriors"] = []
+    elif isinstance(pri, str):
+        chunks = [c for c in pri.split("|") if c.strip() != ""]
+        params["hyperp_gausspriors"] = [[float(a), float(b)] for (a, b) in
+                                        [p.split("_") for p in chunks]]
+    elif isinstance(pri, (list, tuple)):
+        if len(pri) == 2 and all(isinstance(x, (int, float)) for x in pri):
+            params["hyperp_gausspriors"] = [[float(pri[0]), float(pri[1])]]
+        else:
+            params["hyperp_gausspriors"] = [[float(p[0]), float(p[1])] for p in pri]
+    else:
+        raise TypeError(f"Unsupported hyperp_gausspriors type: {type(pri)}")
+
+
+
+def table_keys(name):
+    """
+    Get all table alias names given a section of the TOML file.
+
+    Parameters
+    ----------
+    name : str
+        Section name (e.g., "saving options").
 
     Returns
     -------
     tuple
-        - gaussparanames : np.ndarray
-            Array of parameter names.
-        - hyperp_gausspriors : list of lists
-            List of [mean, std] values for each parameter.
+        All possible alias names for that table.
     """
+    return _TABLE_ALIASES.get(name, (name,))
 
-    # Handle parameter names
-    if input_para["gaussparanames"] == "":
-        gaussparanames = np.array([])
-    else:
-        gaussparanames = np.array(input_para["gaussparanames"].split('_'))
 
-    # Handle hyperparameter priors
-    if input_para["hyperp_gausspriors"] == "":
-        hyperp_gausspriors = []
-    else:
-        hyperp_gausspriors = [parse_range_string(pair) for pair in input_para["hyperp_gausspriors"].split('|')]
-
-    if len(hyperp_gausspriors) != len(gaussparanames):
-        raise ValueError(f"Number of hyperparameter ranges ({len(hyperp_gausspriors)}) does not match "
-                         f"number of Gaussian parameters ({len(gaussparanames)}).")
-
-    if len(gaussparanames):
-        print("** Using Gaussian prior on ", list(gaussparanames))
-
-    return gaussparanames, hyperp_gausspriors
-
-def parse_all_input_exotune_iniFile(iniFile):
+def config_get(cfg, logical_table, key, default=None, required=False):
     """
-    Parse an INI configuration file and command-line style arguments into a parameter dictionary.
+    Unified accessor for config values from INI or TOML.
 
     Parameters
     ----------
-    iniFile : str
-        Path to the INI configuration file
+    cfg : dict
+        Dictionary of parsed configuration tables.
+
+    logical_table : str
+        Logical table name (e.g., "stellar params"). Underscore/space variants are handled.
+
+    key : str
+        Key to fetch from the table.
+
+    default : Any, optional
+        Default value if the key is missing (default: None).
+
+    required : bool, optional
+        If True, raises an error if the key is missing (default: False).
 
     Returns
     -------
-    params : dict
-        A dictionary where keys are parameter names and values are parsed from the INI file.
-        This dictionary can be used directly in downstream modeling and fitting code (after a bit of further parsing).
+    Any
+        The value from the config or the default.
     """
+    for t in table_keys(logical_table):
+        if t in cfg and key in cfg[t]:
+            return cfg[t][key]
+    if required:
+        raise KeyError(f"Missing key '{key}' in [{logical_table}]")
+    return default
 
-    config = configparser.ConfigParser()
-    config.read(iniFile)
 
-    print('\nReading in the inputs...')
+def load_as_dict(path):
+    """
+    Load an INI or TOML config file into a uniform dictionary.
 
+    Parameters
+    ----------
+    path : str
+        Path to the configuration file.
+
+    Returns
+    -------
+    tuple
+        (format, dict) where format is "ini" or "toml", and dict contains sections with keys/values.
+    """
+    ext = (os.path.splitext(path)[1].lower() or "")
+    use_toml = ext in {".toml", ".tml", ".tom"}
+
+    if use_toml:
+        with open(path, "rb") as f:
+            data = tomli.load(f)
+        return "toml", data
+
+    cp = configparser.ConfigParser()
+    cp.read(path)
+    sections = {}
+    for sec in cp.sections():
+        sections[sec] = {k: v for k, v in cp.items(sec)}
+    return "ini", sections
+
+
+def parse_all_input_exotune_iniFile(config_path):
+    """
+    Parse an INI or TOML configuration file and command-line style arguments into a parameter dictionary.
+
+    This function provides backward compatibility for INI files while supporting
+    the newer TOML format. Command-line arguments override values from the config file.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the configuration file (.ini or .toml).
+
+    Returns
+    -------
+    tuple
+        - params : dict
+            Dictionary of parameter names and values, normalized for downstream use.
+        - label_run : str
+            A label string describing the run, built from selected parameters.
+    """
+    fmt, cfg = load_as_dict(config_path)
+
+    # ---- Argparse with defaults from config ----
     parser = argparse.ArgumentParser(description='Inputs for stellar contamination retrieval.')
 
-    def safe_get(section, key, val_type=str):
-        """
-        Safely retrieve and cast a value from a ConfigParser object.
-
-        This function attempts to fetch a value from a given section and key in an
-        INI configuration file and cast it to the desired type. If the key is missing,
-        it returns None. If casting fails, it falls back to returning the raw string.
-
-        Parameters
-        ----------
-        section : str
-            The section in the INI file to look for the key.
-        key : str
-            The specific key to retrieve within the section.
-        val_type : type, optional
-            The desired type to cast the value to. Supported types are: str, int, float,
-            bool.
-
-        Returns
-        -------
-        value : Any or None
-            The value from the INI file, cast to the specified type if possible.
-            Returns None if the key is not found.
-        """
-
-        if not config.has_option(section, key):
-            return None
-        value = config.get(section, key)
-        try:
-            if val_type == bool:
-                return config.getboolean(section, key)
-            elif val_type == int:
-                return config.getint(section, key)
-            elif val_type == float:
-                return config.getfloat(section, key)
-            else:
-                return value
-        except ValueError:
-            return value
-
     # [choice of inputs]
-    parser.add_argument('-label_obs', default=safe_get('choice of inputs', 'label_obs'),
-                        help='Label for the current set of observations')
-    parser.add_argument('-start_from_timeseries', type=bool,
-                        default=safe_get('choice of inputs', 'start_from_timeseries', bool),
-                        help='Whether to start from a time series of spectra (True) or from a single spectrum file (False)')
-    parser.add_argument('-save_median_spectrum', type=bool,
-                        default=safe_get('choice of inputs', 'save_median_spectrum', bool),
-                        help='Whether to save to file the median spectrum created from the time series')
+    parser.add_argument('-label_obs', default=config_get(cfg, 'choice of inputs', 'label_obs'))
+    parser.add_argument('-start_from_timeseries',
+                        type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'choice of inputs', 'start_from_timeseries')))
+    parser.add_argument('-save_median_spectrum',
+                        type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'choice of inputs', 'save_median_spectrum')))
     parser.add_argument('-path_save_median_spectrum',
-                        default=safe_get('choice of inputs', 'path_save_median_spectrum'),
-                        help='Path to save the median spectrum to')
+                        default=config_get(cfg, 'choice of inputs', 'path_save_median_spectrum', default=""))
     parser.add_argument('-path_to_stellar_spec_ts',
-                        default=safe_get('choice of inputs', 'path_to_stellar_spec_ts'),
-                        help='Path to stellar spectrum time series (e.g., Eureka! output)')
-    parser.add_argument('-path_to_spec', default=safe_get('choice of inputs', 'path_to_spec'),
-                        help='Path to spectrum file (used if not starting from a time series)')
-    parser.add_argument('-spec_format', default=safe_get('choice of inputs', 'spec_format'),
-                        help='Spectrum format (options implemented: "MR_csv", "basic")')
-    parser.add_argument('-stmodfile', default=safe_get('choice of inputs', 'stmodfile'),
-                        help='Stellar models grid file path')
+                        default=config_get(cfg, 'choice of inputs', 'path_to_stellar_spec_ts', default=""))
+    parser.add_argument('-path_to_spec', default=config_get(cfg, 'choice of inputs', 'path_to_spec'))
+    parser.add_argument('-spec_format', default=config_get(cfg, 'choice of inputs', 'spec_format'))
+    parser.add_argument('-stmodfile', default=config_get(cfg, 'choice of inputs', 'stmodfile'))
 
     # [preprocessing]
-    parser.add_argument('-optimize_param', type=bool, default=safe_get('preprocessing', 'optimize_param', bool),
-                        help='Whether to stop after initial processing instead of running MCMC')
-    parser.add_argument('-obsmaskpattern', default=safe_get('preprocessing', 'obsmaskpattern'),
-                        help='Label for time/wavelength mask pattern (e.g., "avoidflares")')
-    parser.add_argument('-kern_size', default=safe_get('preprocessing', 'kern_size'),
-                        help='Kernel size for median-filtered light curve (for plotting)')
-    parser.add_argument('-jd_range_mask', default=safe_get('preprocessing', 'jd_range_mask'),
-                        help='JD ranges to mask when building spectrum (format: start1_end1|start2_end2...)')
-    parser.add_argument('-wave_range_mask', default=safe_get('preprocessing', 'wave_range_mask'),
-                        help='Wavelength ranges to mask (same format as jd_range_mask)')
+    parser.add_argument('-optimize_param', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'preprocessing', 'optimize_param')))
+    parser.add_argument('-obsmaskpattern', default=config_get(cfg, 'preprocessing', 'obsmaskpattern'))
+    parser.add_argument('-kern_size', default=config_get(cfg, 'preprocessing', 'kern_size', default=""))
+    parser.add_argument('-jd_range_mask', default=config_get(cfg, 'preprocessing', 'jd_range_mask', default=""))
+    parser.add_argument('-wave_range_mask', default=config_get(cfg, 'preprocessing', 'wave_range_mask', default=""))
 
     # [saving options]
-    parser.add_argument('-save_fit', type=bool, default=safe_get('saving options', 'save_fit', bool),
-                        help='Whether to save the fit results')
-    parser.add_argument('-res_suffix', default=safe_get('saving options', 'res_suffix'),
-                        help='Suffix for all output result files')
+    parser.add_argument('-save_fit', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'saving options', 'save_fit')))
+    parser.add_argument('-res_suffix', default=config_get(cfg, 'saving options', 'res_suffix'))
 
     # [stellar params]
-    parser.add_argument('-Teffstar', type=float, default=safe_get('stellar params', 'Teffstar', float),
-                        help='Effective temperature of the star in Kelvin')
-    parser.add_argument('-feh', type=float, default=safe_get('stellar params', 'feh', float),
-                        help='Metallicity [Fe/H] of the star')
-    parser.add_argument('-loggstar', type=float, default=safe_get('stellar params', 'loggstar', float),
-                        help='Log surface gravity (log g) of the star in cgs units')
-    parser.add_argument('-logg_phot_source', default=safe_get('stellar params', 'logg_phot_source'),
-                        help='Source for default photospheric log g ("value" or "loggstar")')
-    parser.add_argument('-logg_phot_value', type=float,
-                        default=safe_get('stellar params', 'logg_phot_value', float),
-                        help='Value of default photospheric log g if "value" is used')
+    parser.add_argument('-Teffstar', type=float, default=float(config_get(cfg, 'stellar params', 'Teffstar')))
+    parser.add_argument('-feh', type=float, default=float(config_get(cfg, 'stellar params', 'feh')))
+    parser.add_argument('-loggstar', type=float, default=float(config_get(cfg, 'stellar params', 'loggstar')))
+    parser.add_argument('-logg_phot_source', default=config_get(cfg, 'stellar params', 'logg_phot_source'))
+    parser.add_argument('-logg_phot_value', type=float, default=float(config_get(cfg, 'stellar params', 'logg_phot_value')))
 
     # [stellar models]
-    parser.add_argument('-label_grid', default=safe_get('stellar models', 'label_grid'),
-                        help='Label for the stellar model grid')
-    parser.add_argument('-logg_range', default=safe_get('stellar models', 'logg_range'),
-                        help='Range of log g values for the grid (format: min_max)')
-    parser.add_argument('-loggstep', type=float, default=safe_get('stellar models', 'loggstep', float),
-                        help='Step size for log g grid in cgs')
-    parser.add_argument('-Teff_range', default=safe_get('stellar models', 'Teff_range'),
-                        help='Effective temperature range ("default" or min_max)')
-    parser.add_argument('-Teffstep', type=float, default=safe_get('stellar models', 'Teffstep', float),
-                        help='Step size for Teff grid in Kelvin')
-    parser.add_argument('-resPower_target', type=int,
-                        default=safe_get('stellar models', 'resPower_target', int),
-                        help='Resolving power at which the model grid was computed')
-    parser.add_argument('-wave_range', default=safe_get('stellar models', 'wave_range'),
-                        help='Wavelength range for model grid (format: minwave_maxwave)')
+    parser.add_argument('-label_grid', default=config_get(cfg, 'stellar models', 'label_grid'))
+    parser.add_argument('-logg_range', default=config_get(cfg, 'stellar models', 'logg_range'))
+    parser.add_argument('-loggstep', type=float, default=float(config_get(cfg, 'stellar models', 'loggstep')))
+    parser.add_argument('-Teff_range', default=config_get(cfg, 'stellar models', 'Teff_range'))
+    parser.add_argument('-Teffstep', type=float, default=float(config_get(cfg, 'stellar models', 'Teffstep')))
+    parser.add_argument('-resPower_target', type=int, default=int(config_get(cfg, 'stellar models', 'resPower_target')))
+    parser.add_argument('-wave_range', default=config_get(cfg, 'stellar models', 'wave_range'))
 
     # [MCMC params]
-    parser.add_argument('-parallel', type=bool, default=safe_get('MCMC params', 'parallel', bool),
-                        help='Run MCMC in parallel using multiple CPUs')
-    parser.add_argument('-ncpu', type=int, default=safe_get('MCMC params', 'ncpu', int),
-                        help='Number of CPUs to use for MCMC')
-    parser.add_argument('-nsteps', type=int, default=safe_get('MCMC params', 'nsteps', int),
-                        help='Number of MCMC steps')
-    parser.add_argument('-frac_burnin', type=float, default=safe_get('MCMC params', 'frac_burnin', float),
-                        help='Fraction of chains to discard as burn-in')
-
-    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fitFscale',
-                  'fiterrInfl']:
-        parser.add_argument(f'-{param}', type=bool, default=safe_get('MCMC params', param, bool),
-                            help=f'Whether to fit {param}')
+    parser.add_argument('-parallel', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'MCMC params', 'parallel')))
+    parser.add_argument('-ncpu', type=int, default=int(config_get(cfg, 'MCMC params', 'ncpu')))
+    parser.add_argument('-nsteps', type=int, default=int(config_get(cfg, 'MCMC params', 'nsteps')))
+    parser.add_argument('-frac_burnin', type=float, default=float(config_get(cfg, 'MCMC params', 'frac_burnin')))
+    # fitFscale is your original; accept fitDscale alias from your other module
+    fitFscale_default = config_get(cfg, 'MCMC params', 'fitFscale')
+    if fitFscale_default is None:
+        fitFscale_default = config_get(cfg, 'MCMC params', 'fitDscale')  # alias
+    parser.add_argument('-fitFscale', type=convert_to_bool, default=convert_to_bool(fitFscale_default))
+    for param in ['fitspot', 'fitfac', 'fitThet', 'fitTphot', 'fitlogg_phot', 'fitlogg_het', 'fiterrInfl']:
+        parser.add_argument(f'-{param}', type=convert_to_bool, default=convert_to_bool(config_get(cfg, 'MCMC params', param)))
 
     # [priors]
-    parser.add_argument('-gaussparanames', default=safe_get('priors', 'gaussparanames'),
-                        help='List of parameters with Gaussian priors (e.g., Tphot_ffac)')
-    parser.add_argument('-hyperp_gausspriors', default=safe_get('priors', 'hyperp_gausspriors'),
-                        help='Means and stds for Gaussian priors (e.g., mean1_std1|mean2_std2)')
-    parser.add_argument('-fitLogfSpotFac', default=safe_get('priors', 'fitLogfSpotFac'),
-                        help='Flags for log/linear prior on fspot/ffac: 0 for lin, 1 for log (e.g., 0_0)')
-    parser.add_argument('-hyperp_logpriors', default=safe_get('priors', 'hyperp_logpriors'),
-                        help='Prior bounds on heterogeneity fractions if using log prior (e.g., -5_0)')
+    parser.add_argument('-gaussparanames', default=config_get(cfg, 'priors', 'gaussparanames', default=""))
+    parser.add_argument('-hyperp_gausspriors', default=config_get(cfg, 'priors', 'hyperp_gausspriors', default=""))
+    parser.add_argument('-fitLogfSpotFac', default=config_get(cfg, 'priors', 'fitLogfSpotFac', default=""))
+    parser.add_argument('-hyperp_logpriors', default=config_get(cfg, 'priors', 'hyperp_logpriors', default=""))
 
     # [plotting]
-    parser.add_argument('-pad', type=float, default=safe_get('plotting', 'pad', float),
-                        help='Padding in microns for plotting spectrum')
-    parser.add_argument('-target_resP', type=int, default=safe_get('plotting', 'target_resP', int),
-                        help='Target resolving power used to smooth models for plotting')
+    parser.add_argument('-pad', type=float, default=float(config_get(cfg, 'plotting', 'pad')))
+    parser.add_argument('-target_resP', type=int, default=int(config_get(cfg, 'plotting', 'target_resP')))
 
-    # Parse and return
-    args, unknown = parser.parse_known_args()
+    # ---- CLI override parse ----
+    args, _unknown = parser.parse_known_args()
+    params = deepcopy(vars(args))
 
-    params = deepcopy(args.__dict__)
+    # ---------- Normalization (works for INI strings and TOML arrays) ----------
+    # masks
+    for k in ("jd_range_mask", "wave_range_mask"):
+        params[k] = parse_mask_ranges(params[k])
 
-    # -- Do further parsing for params that aren't as easy to read in from the ini file
-
-    # Preprocessing
-    for para_to_parse in ["jd_range_mask", "wave_range_mask"]:
-        if params[para_to_parse] == "":
-            params[para_to_parse] = []
-        else:
-            params[para_to_parse] = [parse_range_string(pair) for pair in params[para_to_parse].split('|')]
-
-    # Stellar models grid
-    params["logg_range"] = parse_range_string(params["logg_range"])
-
-    if params["Teff_range"] == "default":
-        params["Teff_range"] = [np.min([2300. - params["Teffstar"], -100.]) + params["Teffstar"],
-                                params["Teffstar"] + 1000.]
+    # ranges
+    params["logg_range"] = parse_range_pair(params["logg_range"], float)
+    if isinstance(params["Teff_range"], str) and params["Teff_range"].lower() == "default":
+        params["Teff_range"] = [np.max([params["Teffstar"] - 1000.0, 2300.0]), params["Teffstar"] + 1000.0]
     else:
-        params["Teff_range"] = parse_range_string(params["Teff_range"])
+        params["Teff_range"] = parse_range_pair(params["Teff_range"], float)
+    params["wave_range"] = parse_range_pair(params["wave_range"], float)
 
-    params["wave_range"] = parse_range_string(params["wave_range"])
+    # gaussian priors: minimal pre-normalization, then delegate to sru.parse_gaussian_inputs
+    preprocess_gaussians(params)
+    names, priors = parse_gaussian_inputs(params)
+    params["gaussparanames"], params["hyperp_gausspriors"] = names, priors
 
-    # Setup of priors
-    res = parse_gaussian_inputs(params)
-    params["gaussparanames"] = res[0]
-    params["hyperp_gausspriors"] = res[1]
+    # fitLogfSpotFac / hyperp_logpriors -> lists of length 2
+    params["fitLogfSpotFac"] = parse_range_pair(params["fitLogfSpotFac"], int)
+    params["hyperp_logpriors"] = parse_range_pair(params["hyperp_logpriors"], float)
 
-    params["fitLogfSpotFac"] = parse_range_string(params["fitLogfSpotFac"], as_type=int)
-    params["hyperp_logpriors"] = parse_range_string(params["hyperp_logpriors"])
-
-    # create the label for the run
-    label_run = ""
-    label_run = label_run + "Obs_"+params["label_obs"] + "_Mod_" + params["label_grid"]
-    label_run = label_run + "_Mask" + params["obsmaskpattern"]
-    if len(params["kern_size"])==0:
+    # kern_size
+    if params["kern_size"] in (None, "", []):
         params["kern_size"] = None
     else:
         params["kern_size"] = int(params["kern_size"])
 
+    # parallel guard
     if params["parallel"] is False:
-        params["ncpu"] = 1 # overwrite
-    print("\nDone with parsing!")
+        params["ncpu"] = 1
 
+    # label
+    label_run = f"Obs_{params['label_obs']}_Mod_{params['label_grid']}_Mask{params['obsmaskpattern']}"
+
+    print("\nDone with parsing!")
     return params, label_run
+
+
+def parse_gaussian_inputs(input_para):
+    """
+    Forwarder to the master implementation in stellar_retrieval_utilities.
+
+    Parameters
+    ----------
+    input_para : dict
+
+    Returns
+    -------
+    (gaussparanames: np.ndarray, hyperp_gausspriors: list[list[float]])
+    """
+    return sru.parse_gaussian_inputs(input_para)
+
+
 
 ## Pre-processing
 
@@ -680,9 +787,11 @@ def calc_and_plot_Fscale_guess(param, Teffs_grid, loggs_grid, wv_template_thisR,
 
 ## Modeling
 
+
 def Fscale_obs(Fscale, fspot, ffac, model_phot_fixR, model_spot_fixR, model_fac_fixR):
     """
     Compute the model spectrum scaled by a flux factor.
+    Wrapper around stellar_retrieval_utilities' combine_components function.
 
     Parameters
     ----------
@@ -704,17 +813,8 @@ def Fscale_obs(Fscale, fspot, ffac, model_phot_fixR, model_spot_fixR, model_fac_
     ndarray
         Scaled full stellar model spectrum.
     """
-
-    phot = (1 - ffac - fspot) * model_phot_fixR
-    full_model = phot
-
-    if fspot > 0:
-        spot = fspot * model_spot_fixR
-        full_model = full_model + spot
-    if ffac > 0:
-        fac = ffac * model_fac_fixR
-        full_model = full_model + fac
-    return Fscale * full_model
+    return sru.combine_components("flux", Fscale, fspot, ffac,
+                              model_phot_fixR, model_spot_fixR, model_fac_fixR)
 
 def integ_model(lam_min,lam_max,wave,F):
     """
@@ -723,6 +823,7 @@ def integ_model(lam_min,lam_max,wave,F):
     Computes the average flux within multiple wavelength intervals by integrating
     the flux density and normalizing by the width of each interval.
 
+    Here simply a compatibility wrapper that defers to the other utilities function.
     Parameters
     ----------
     lam_min : array_like
@@ -740,15 +841,7 @@ def integ_model(lam_min,lam_max,wave,F):
         Array of average integrated fluxes over the specified wavelength ranges.
     """
 
-    F_int = []
-    dwave=wave[1:]-wave[:-1]
-
-    for i in range(lam_min.size):
-        ind = np.where((wave>=lam_min[i])*(wave<lam_max[i]))
-        numerator = np.trapz(F[ind] * dwave[ind],x=wave[ind])
-        denominator = np.trapz(dwave[ind],x=wave[ind])
-        F_int.append(numerator/denominator)
-    return np.array(F_int)
+    return sru.integ_model(lam_min, lam_max, wave, F)
 
 
 def calc_spectrum_model_and_integrate(Fscale, fspot, ffac, spec, model_wv, model_phot_fixR, model_spot_fixR,
@@ -809,6 +902,8 @@ def get_closest_models_from_grid(param, models_grid_fixedR, Teffs_grid, loggs_gr
     Retrieve the closest-matching model spectra for the photosphere, spot, and faculae
     components based on input stellar parameters.
 
+    Wrapper around the function compatible with both retrieval modalities in stellar_retrieval_utilities.
+
     Parameters
     ----------
     param : dict
@@ -831,22 +926,8 @@ def get_closest_models_from_grid(param, models_grid_fixedR, Teffs_grid, loggs_gr
 
     """
 
-    # Spot model
-    ind_Tspot = np.argmin(np.abs(Teffs_grid - param["Tspot"]))
-    ind_logg_het = np.argmin(np.abs(loggs_grid - param["logghet"]))
-    model_spot_fixR = models_grid_fixedR[ind_Tspot, ind_logg_het]
+    return sru.get_closest_models_from_grid(param, models_grid_fixedR, Teffs_grid, loggs_grid)
 
-    # Faculae model
-    ind_Tfac = np.argmin(np.abs(Teffs_grid - param["Tfac"]))
-    ind_logg_het = np.argmin(np.abs(loggs_grid - param["logghet"]))
-    model_fac_fixR = models_grid_fixedR[ind_Tfac, ind_logg_het]
-
-    # Photosphere model
-    ind_Tphot = np.argmin(np.abs(Teffs_grid - param["Tphot"]))
-    ind_logg_phot = np.argmin(np.abs(loggs_grid - param["loggphot"]))
-    model_phot_fixR = models_grid_fixedR[ind_Tphot, ind_logg_phot]
-
-    return model_phot_fixR, model_spot_fixR, model_fac_fixR
 
 ## MCMC setup
 
@@ -856,6 +937,8 @@ def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir):
 
     This function copies the main script, the INI configuration file, and a utility
     script into a specified results directory, renaming them with standard names.
+
+    Wrapper around `sru.save_ref_files` adapted to ExoTUNE's naming conventions.
 
     Parameters
     ----------
@@ -875,44 +958,29 @@ def save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir):
         Path to the directory where the reference copies will be saved.
     """
 
-    # ** Get .py files used to run this case and save to results directory
-    script_name = "exotune_runfile_thisrun.py"
-    utils_script_name = "exotune_utilities_thisrun.py"
-    iniFile_name = "iniFile_exotune_thisrun.py"
 
-    print("\nSaving files...")
-    print("\n--Run-analysis file...")
-    print("\n**This file:", this_dir + this_script)
-    print("Saved to file:", res_dir + script_name)
-    shutil.copy(this_dir + this_script, res_dir + script_name)
-    print("... Done.**")
+    names = dict(
+        script_name="exotune_runfile_thisrun.py",
+        utils_script_name="exotune_utilities_thisrun.py",
+        ini_name="iniFile_exotune_thisrun.py",
+    )
+    return sru.save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir, names=names)
 
-    print("\n--INI file...")
-    print("\n**This file:", this_dir + iniFile)
-    print("Saved to file:", res_dir + iniFile_name)
-    shutil.copy(this_dir + iniFile, res_dir + iniFile_name)
-    print("... Done.**")
-
-    print("\n--Utilities file...")
-
-    print("\n**This file:", utils_script)
-    print("Saved to file:", res_dir + utils_script_name)
-
-    shutil.copy(utils_script, res_dir + utils_script_name)
-    print("... Done.**")
 
 def get_default_logg(params):
     """
     Get the default values for the stellar log g
 
-    ----------
     Parameters
     ----------
     params: dict
     Dictionary obtained when reading in the ini file
-
-    -------
     This dictionary is updated with logg_phot_default
+
+    Returns
+    -------
+    None
+
     """
 
     # logg for MCMC
@@ -1078,6 +1146,7 @@ def init_default_and_fitted_param_fromDict(params, Fscale_guess=1, dlogg_het_gue
 
 def get_derived_param(param):
     """
+    Wrapper around stellar_retrieval_utilities.get_derived_param to calculate derived parameters
     Parameters
     ----------
     param : dict
@@ -1087,21 +1156,13 @@ def get_derived_param(param):
     -------
     param with derived parameters updated
     """
-    param["Tspot"] = param["Tphot"] + param["deltaTspot"]
-    param["Tfac"] = param["Tphot"] + param["deltaTfac"]
-    param["logghet"] = param["loggphot"] + param["dlogghet"]
-    param["Fscale"] = 10 ** (param["logFscale"])
-    param["errInfl"] = 10 ** (param["logErrInfl"])
-    if "log_fspot" in param.keys():
-        param["fspot"] = 10 ** param["log_fspot"]
-    if "log_ffac" in param.keys():
-        param["ffac"] = 10 ** param["log_ffac"]
-    return param
+    return sru.get_derived_param(param)
 
 
 def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
-                     fitLogfSpotFac=[False, False], hyperp_logpriors=[], T_grid=[2300, 10000],
-                     logg_grid=[2.5, 5.5], Fscale_guess=1.):
+                         fitLogfSpotFac=[False, False], hyperp_logpriors=[],
+                         T_grid=[2300., 10000.], logg_grid=[2.5, 5.5],
+                         Fscale_guess=1.0):
     """
     Generate prior bounds for model parameters based on default ranges, user-specified Gaussian priors,
     and optional log-space fitting options for specific parameters.
@@ -1126,62 +1187,18 @@ def get_param_priors(param, gaussparanames, hyperp_gausspriors=[],
     Fscale_guess : float, optional
         Initial guess for the flux scaling factor, used to set the bounds for 'logFscale'.
 
+
     Returns
     -------
     dict
         Dictionary mapping each parameter name to a [lower_bound, upper_bound] list representing its prior range.
-        For parameters fitted in log-space, the key is prefixed with 'log_'.
+        For parameters fitted in log-space, the key is prefixed with 'log' followed by underscore.
     """
-
-    defaultpriors = dict()
-
-    defaultpriors['ffac'] = [0., 0.9]
-    defaultpriors['fspot'] = [0., 0.9]
-    defaultpriors['deltaTfac'] = [100, T_grid[-1] - param["Tphot"]]
-    defaultpriors['deltaTspot'] = [T_grid[0] - param["Tphot"], -100.]
-    defaultpriors["Tphot"] = [T_grid[0], T_grid[-1]]
-    defaultpriors["logFscale"] = [np.log10(Fscale_guess) - 5, np.log10(Fscale_guess) + 5]
-    defaultpriors["logErrInfl"] = [0, np.log10(50)]
-
-    defaultpriors["loggphot"] = [np.max([logg_grid[0], 2.5]), np.min([5.5, logg_grid[-1]])]
-    defaultpriors["dlogghet"] = [logg_grid[0] - param["loggphot"], 0.]
-
-    parampriors = dict()
-
-    # check parameters for log priors
-    allparanames = ['ffac', "fspot", "deltaTfac", "deltaTspot", "Tphot", "logFscale", "loggphot", "dlogghet",
-                    "logErrInfl"]
-    for par in allparanames:
-        if par not in ["fspot", "ffac"]:
-            parampriors[par] = defaultpriors[par]
-        else:
-            if par == "fspot":
-                if fitLogfSpotFac[0]:
-                    lowlim = hyperp_logpriors[0]
-                    upplim = hyperp_logpriors[1]
-                    parampriors["log_" + par] = [lowlim, upplim]
-                else:
-                    parampriors[par] = defaultpriors[par]
-            elif par == "ffac":
-                if fitLogfSpotFac[1]:
-                    lowlim = hyperp_logpriors[0]
-                    upplim = hyperp_logpriors[1]
-                    parampriors["log_" + par] = [lowlim, upplim]
-                else:
-                    parampriors[par] = defaultpriors[par]
-            else:
-                parampriors[par] = defaultpriors[par]
-
-    for par in param:
-        if par in gaussparanames:
-            ind_gaussparam = np.where(gaussparanames == par)[0][0]
-            mean_gaussparam = hyperp_gausspriors[ind_gaussparam][0]
-            std_gaussparam = hyperp_gausspriors[ind_gaussparam][1]
-            new_prior = [np.max([mean_gaussparam - 5. * std_gaussparam, parampriors[par][0]]),
-                         np.min([mean_gaussparam + 5. * std_gaussparam, parampriors[par][1]])]
-            parampriors[par] = new_prior
-    return parampriors
-
+    return sru.get_param_priors_master(
+        param, gaussparanames, hyperp_gausspriors,
+        fitLogfSpotFac, hyperp_logpriors,
+        T_grid, logg_grid,
+        mode="flux", Fscale_guess=Fscale_guess)
 
 def lnprior(theta, param, fitparanames, gaussparanames, hyperp_gausspriors,
             fitLogfSpotFac, hyperp_logpriors, T_grid, logg_grid, Fscale_guess):
@@ -1393,14 +1410,18 @@ def lnprob(theta, spec, param, fitparanames, gaussparanames, hyperp_gausspriors,
 
 ##  Saving and basic diagnostics
 
-def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparanames, save_fit):
-    # write csv file and astropy table with samples outside of burn-in
+
+
+
+def save_mcmc_to_pandas(*args, **kwargs):
     """
-    Save MCMC sampling results to disk and extract best-fit parameters.
+    Save MCMC sampling results and extract best-fit parameters.
 
     This function processes the MCMC sampler output by removing the burn-in phase,
     reshaping and storing the flattened samples as a Pandas DataFrame and an Astropy Table.
     It also computes and saves the best-fit parameters based on the maximum likelihood.
+
+    This is simply a wrapper around `stellar_retrieval_utilities.save_mcmc_to_pandas`
 
     Parameters
     ----------
@@ -1436,30 +1457,7 @@ def save_mcmc_to_pandas(results_folder, runname, sampler, burnin, ndim, fitparan
     t_res : astropy.table.Table
         Astropy table version of the `samples` DataFrame.
     """
-
-    samples = pd.DataFrame(sampler.chain[:, burnin:, :].reshape((-1, ndim)),
-                           columns=[x for x in fitparanames])
-    lnprobability = pd.Series(sampler.lnprobability[:, burnin:].reshape(-1),
-                              name='lnprobability')
-    lnlikesave = pd.Series(sampler.lnprobability[:, burnin:].reshape(-1),
-                           name='lnlike')
-    panda = pd.concat([lnprobability, lnlikesave, samples], axis=1)
-    t_res = table.Table.from_pandas(panda)
-    if save_fit:
-        aio.ascii.write(t_res, results_folder + "exotune_pandas_" + runname + '.csv', format='csv', overwrite=True)
-
-    # save best fit parameters and quantiles
-    bestfit, ind_bestfit, ind_maxprob = samp2bestfit(panda)
-    print(bestfit)
-    if save_fit:
-        bestfit.to_csv(results_folder + 'exotune_bestfit_' + runname + '.csv')
-
-    print("\nMax Likelihood:\n")
-    print(bestfit["MaxLike"])
-
-    parabestfit = np.array(bestfit["MaxLike"][2:])
-    return bestfit, ind_bestfit, ind_maxprob, parabestfit, samples, t_res
-
+    return sru.save_mcmc_to_pandas(*args, **kwargs, prefix="exotune")
 
 def samp2bestfit(samp):
     """
@@ -1467,6 +1465,8 @@ def samp2bestfit(samp):
 
     Calculates key quantiles (median, 1 and 2 sigma) and identifies the samples
     corresponding to the maximum posterior probability and maximum likelihood.
+
+    Wrapper around `stellar_retrieval_utilities.samp2bestfit` (identical behavior).
 
     Parameters
     ----------
@@ -1490,38 +1490,14 @@ def samp2bestfit(samp):
         Index of the sample with the maximum posterior probability.
     """
 
-    x50 = samp.quantile(0.50)
-    x50.name = '50'
-    x16 = samp.quantile(0.16)
-    x16.name = '16'
-    x84 = samp.quantile(0.84)
-    x84.name = '84'
-    x025 = samp.quantile(0.025)
-    x025.name = '2.5'
-    x975 = samp.quantile(0.975)
-    x975.name = '97.5'
-
-    ind = np.asarray(samp.lnprobability).argmax()
-    MaxProb = samp.iloc[ind]
-    MaxProb.name = 'MaxProb'
-
-    ind_bestfit = np.asarray(samp.lnlike).argmax()
-    MaxLike = samp.iloc[ind_bestfit]
-    MaxLike.name = 'MaxLike'
-
-    bestfit = pd.concat([x50, x16, x84, x025, x975, MaxLike, MaxProb], axis=1)
-    bestfit['-1sigma'] = bestfit['50'] - bestfit['16']
-    bestfit['+1sigma'] = bestfit['84'] - bestfit['50']
-    bestfit['-2sigma'] = bestfit['50'] - bestfit['2.5']
-    bestfit['+2sigma'] = bestfit['97.5'] - bestfit['50']
-
-    return bestfit, ind_bestfit, ind
+    return sru.samp2bestfit(samp)
 
 def BIC(chi2,nDataPoints,nPara):
 
     """
     Calculate the Bayesian Information Criterion (BIC) for model comparison.
 
+    Simple wrapper around `stellar_retrieval_utilities.BIC` to compute the BIC value
     Parameters
     ----------
     chi2 : float
@@ -1545,7 +1521,7 @@ def BIC(chi2,nDataPoints,nPara):
     https://doi.org/10.1111/j.1745-3933.2007.00306.x
     """
 
-    return chi2 + nPara*np.log(nDataPoints)
+    return sru.BIC(chi2, nDataPoints, nPara)
 
 def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, results_folder, runname, save_fit=True):
     """
@@ -1577,23 +1553,8 @@ def save_bestfit_stats(spec, ind_bestfit, fitparanames, flat_oot_spec_models, re
     Output file: 'exotune_bestfit_stats_<runname>.csv'
     """
 
-    print("Saving stats on the best fit...")
-    bestfit_stats = dict()
-    best_model = flat_oot_spec_models[ind_bestfit]
-    nPara = len(fitparanames)
-    nDataPoints = len(spec.yval)
-    n_dof = nDataPoints - nPara
-    bestfit_stats["ind_postburnin"] = ind_bestfit
-    bestfit_stats["chi2"] = np.sum((spec.yval - best_model) ** 2. / spec.yerrLow ** 2.)
-    bestfit_stats["redchi2"] = bestfit_stats["chi2"] / n_dof
-    bestfit_stats["BIC"] = BIC(bestfit_stats["chi2"], nDataPoints, nPara)
-    t_bestfit_stats = table.Table([bestfit_stats])
-
-    if save_fit:
-        print("Writing to file...")
-        aio.ascii.write(t_bestfit_stats, results_folder + "exotune_bestfit_stats_" + runname + '.csv', format='csv',
-                        overwrite=True)
-    return t_bestfit_stats
+    return sru.save_bestfit_stats(spec, ind_bestfit, fitparanames,
+                   flat_oot_spec_models, results_folder, runname, prefix="exotune",save_fit=save_fit)
 
 
 def get_exotune_blobs(exotune_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 97.7, 99.8]):
@@ -1617,8 +1578,7 @@ def get_exotune_blobs(exotune_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 9
         For example, shape will be (n_percentiles, ...) corresponding to each computed percentile.
     """
 
-    exotune_percentiles = np.nanpercentile(exotune_models_blobs, percentiles, axis=0)
-    return exotune_percentiles
+    return sru.get_percentile_blobs(exotune_models_blobs, percentiles=percentiles)
 
 
 
@@ -1626,6 +1586,7 @@ def get_exotune_blobs(exotune_models_blobs, percentiles=[0.2, 2.3, 15.9, 84.1, 9
 
 def xspeclog(ax, xlim=None, level=1, fmt="%2.1f"):
     """
+    Wrapper around `stellar_retrieval_utilities.xspeclog` to set logarithmic x-axis ticks
     Configure logarithmic x-axis ticks for spectrum plots.
 
     Parameters
@@ -1634,8 +1595,7 @@ def xspeclog(ax, xlim=None, level=1, fmt="%2.1f"):
         The matplotlib axis object on which to set the log-scale x-axis ticks.
     xlim : tuple of float, optional
         Optional (xmin, xmax) tuple to explicitly set the x-axis limits.
-    level : int or float, default=1
-        Preset level for tick density and appearance:
+    level : int or float, default=1. Preset level for tick density and appearance:
             - 0.5 : Dense major ticks (0.2 to 6, step 0.2) and finer minor ticks (step 0.1)
             - 1   : Standard major ticks at typical wavelengths (e.g., 1.0, 1.5, 2.0, ...)
                     and minor ticks at 0.1 intervals
@@ -1650,38 +1610,13 @@ def xspeclog(ax, xlim=None, level=1, fmt="%2.1f"):
     This function modifies the axis in-place and is adapted from `auxbenneke/utilities.py`.
     """
 
-    if level == 0.5:
-        majorticks = np.arange(0.2, 6, 0.2)
-        minorticks = np.arange(0.2, 6, 0.1)
-    if level == 1:
-        majorticks = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0]
-        minorticks = np.arange(0.3, 6, 0.1)
-    if level == 2:
-        majorticks = np.r_[1.0, 1.5, np.arange(2, 9)]
-        minorticks = None
-    if level == 3:
-        majorticks = np.r_[1.0, 1.5, 2, 3, 4, 6, 8]
-        minorticks = np.r_[5, 7, 9.0]
-    if level == 4:
-        majorticks = np.r_[1, 2, 3, 4, 6, 8]
-        minorticks = np.r_[5, 7, 9]
-
-    ax.set_xscale('log')
-    ax.minorticks_on()
-
-    if majorticks is not None:
-        ax.xaxis.set_major_locator(ticker.LogLocator(subs=majorticks))
-        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter(fmt))
-    if minorticks is not None:
-        ax.xaxis.set_minor_locator(ticker.LogLocator(subs=minorticks))
-        ax.xaxis.set_minor_formatter(ticker.FormatStrFormatter(''))
-
-    if xlim is not None:
-        ax.set_xlim(xlim)
+    sru.xspeclog(ax, xlim=xlim, level=level, fmt=fmt)
 
 
 def setAxesFontSize(ax, fontsize):
     """
+    Wrapper around `stellar_retrieval_utilities.setAxesFontSize` to set font sizes for axis labels and ticks.
+
     Set font size for all axis labels and tick labels of a matplotlib axis.
 
     Updates the font size of the title, x-axis label, y-axis label,
@@ -1699,9 +1634,7 @@ def setAxesFontSize(ax, fontsize):
     This function modifies the axis in-place and is adapted from `auxbenneke/utilities.py`.
     """
 
-    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
-                 ax.get_xticklabels() + ax.get_yticklabels()):
-        item.set_fontsize(fontsize)
+    sru.setAxesFontSize(ax, fontsize)
 
 
 
@@ -1727,38 +1660,24 @@ def get_labels_from_fitparanames(fitparanames):
     Parameters not explicitly listed are ignored and not included in the output.
     """
 
-    labels = []
-    for p in fitparanames:
-        if p == "fspot":
-            labels.append(r"$f_\mathrm{spot}$")
-        elif p == "ffac":
-            labels.append(r"$f_\mathrm{fac}$")
-        elif p == "log_fspot":
-            labels.append(r"$\log_{10} f_\mathrm{spot}$")
-        elif p == "log_ffac":
-            labels.append(r"$\log_{10} f_\mathrm{fac}$")
-        elif p == "deltaTfac":
-            labels.append(r"$\Delta T_\mathrm{fac} [K]$")
-        elif p == "deltaTspot":
-            labels.append(r"$\Delta T_\mathrm{spot} [K]$")
-        elif p == "Tphot":
-            labels.append(r"$T_\mathrm{phot}$ [K]")
-        elif p == "logErrInfl":
-            labels.append(r"log$_{10}$ err. fac.")
-        elif p == "logFscale":
-            labels.append(r"log$_{10}$ $F$")
-        elif p == "logghet":
-            labels.append(r"log $g_\mathrm{het}$")
-        elif p == "dlogghet":
-            labels.append(r"$\Delta$ log $g_\mathrm{het}$")
-        elif p == "loggphot":
-            labels.append(r"log $g_\mathrm{phot}$")
-    return labels
+
+    return sru.get_labels_from_fitparanames_master(fitparanames, include_units=True)
 
 def wrap_text(text, nchar=60):
     """
-    Splits a long string (text, str.) by inserting '\n' every nchar (int.) characters,
+    Splits a long string (text, str.) by inserting a line break every nchar (int.) characters,
     ideally breaking at spaces for better readability.
+    Parameters
+    ----------
+    text : str
+        The input string to be wrapped.
+    nchar : int, default=60
+        Maximum number of characters per line before inserting a line break.
+
+    Returns
+    -------
+    str
+        The input string with line breaks inserted for wrapping.
     """
     words = text.split()
     lines = []
@@ -1780,6 +1699,7 @@ def format_param_str(param, fitparanames):
     """
     Generate a formatted summary string of stellar and fitted parameters.
 
+    Wrapper around `stellar_retrieval_utilities.format_param_str`
     Parameters
     ----------
     param : dict
@@ -1795,21 +1715,20 @@ def format_param_str(param, fitparanames):
     """
 
 
-    param = get_derived_param(param)
-
-    str1 = "Fitted params: "+str(fitparanames)+"\n"
-    str1 = wrap_text(str1,50)
-    str1 = str1 + "\nStellar params: Tphot="+str(int(param["Tphot"]*10.)/10.)+" met="+str(param["met"]) + "\n"
-    str1 = str1 + "logg_phot="+str(param["loggphot"]) + " logg_het="+str(param["logghet"])+ "\n"
-    str1 = str1 + "Tspot="+str(int(param["Tspot"]*10.)/10.)+" Tfac="+str(int(param["Tfac"]*10.)/10.)+"\n"
-    str1 = str1 + "fspot=" + str(int(param["fspot"]*10000.)/10000.) + " ffac="+str(int(param["ffac"]*10000)/10000.)
-    return str1
+    return sru.format_param_str(
+        param,
+        fitparanames,
+        mode="flux",
+        include_fit_list=True,
+        wrap_at=50,   # matches prior XTU wrap_text(…, nchar=50)
+    )
 
 
 def chainplot(samples, labels=None, nwalkers=None, fontsize=None, lw=1, stepRange=None):
     """
     Plot parameter chains from MCMC sampling results.
 
+    Wrapper around `stellar_retrieval_utilities.chainplot`
     Parameters
     ----------
     samples : ndarray
@@ -1837,40 +1756,14 @@ def chainplot(samples, labels=None, nwalkers=None, fontsize=None, lw=1, stepRang
     -----
     This function is adapted from `auxbenneke/utilities.py`.
     """
-
-    if samples.ndim == 2:
-        nsamp = samples.shape[0]
-        npara = samples.shape[1]
-    elif samples.ndim == 3:
-        npara = samples.shape[2]
-
-    if nwalkers is not None:
-        samples = samples.reshape([nwalkers, int(nsamp / nwalkers), npara])
-
-    nx = int(np.sqrt(npara)) + 1
-    ny = int(npara * 1.0 / nx) + 1
-
-    fig, axes = plt.subplots(nx, ny, sharex=True, figsize=(20, 12))
-    if axes.ndim == 1:
-        axes = np.array([axes])
-
-    if stepRange is not None:
-        steps = np.linspace(stepRange[0], stepRange[1], samples.shape[1])
-
-    for i in range(npara):
-        setAxesFontSize(axes[int(i / ny), i % ny], fontsize)
-        if samples.ndim == 2:
-            axes[int(i / ny), i % ny].plot(samples[:, i].T, color="k", alpha=0.4, lw=lw, rasterized=False)
-        elif samples.ndim == 3:
-            if stepRange is not None:
-                axes[int(i / ny), i % ny].plot(steps, samples[:, :, i].T, color="k", alpha=0.4, lw=lw, rasterized=False)
-            else:
-                axes[int(i / ny), i % ny].plot(samples[:, :, i].T, color="k", alpha=0.4, lw=lw, rasterized=False)
-
-        if labels is not None:
-            axes[int(i / ny), i % ny].set_ylabel(labels[i])
-
-    return fig, axes
+    return sru.chainplot(
+            samples,
+            labels=labels,
+            nwalkers=nwalkers,
+            fontsize=fontsize,
+            lw=lw,
+            stepRange=stepRange,
+        )
 
 
 def plot_exotune_blobs(spec, oot_models_blobs,
@@ -1922,55 +1815,23 @@ def plot_exotune_blobs(spec, oot_models_blobs,
 
     """
 
-    # percentiles = [2.5, 16., 50., 84., 97.5]
-    percentiles = [0.2, 2.3, 15.9, 50., 84.1, 97.7, 99.8]
-
-    # for each epoch of each planet, get the median, 1 and 2sigma pred time
-    oot_percentiles = np.nanpercentile(oot_models_blobs, percentiles, axis=0)
-
-    # calc for best fit (need ind_bestfit)
-    oot_best = oot_models_blobs[ind_bestfit, :]
-    if ax is None:
-        fig, ax = spec.plot()
-    else:
-        fig = None
-        spec.plot(ax=ax)
-
-    if plot1sig:
-        ax.fill_between(spec.wave, oot_percentiles[2], oot_percentiles[4], color=color, alpha=0.5, zorder=-9,
-                        label=r'1$\sigma$')
-
-    if plot2sig:
-        ax.fill_between(spec.wave, oot_percentiles[1], oot_percentiles[5], color=color, alpha=0.3, zorder=-10,
-                        label=r'2$\sigma$')
-
-    if plot3sig:
-        ax.fill_between(spec.wave, oot_percentiles[0], oot_percentiles[6], color=color, alpha=0.2, zorder=-10,
-                        label=r'3$\sigma$')
-
-    if plotmedian:
-        ax.plot(spec.wave, oot_percentiles[3], color=color, zorder=-8, label=r'Median')
-
-    if plotbestfit:
-        ax.plot(spec.wave, oot_best, color=bestfit_color, zorder=-8, label=r'Max. likelihood')
-
-    ax.legend(loc=legend_loc)
-
-    if save_csv:
-        dct = dict()
-        dct["wave"] = deepcopy(np.array(spec.wave))
-        dct["bestfit"] = oot_best
-        dct["median"] = oot_percentiles[3]
-        dct["+1 sigma"] = oot_percentiles[4]
-        dct["-1 sigma"] = oot_percentiles[2]
-        dct["+2 sigma"] = oot_percentiles[5]
-        dct["-2 sigma"] = oot_percentiles[1]
-        dct["+3 sigma"] = oot_percentiles[6]
-        dct["-3 sigma"] = oot_percentiles[0]
-
-        t = table.Table(data=dct)
-        t.write(results_folder + "blobs_1_2_3_sigma" + runname + ".csv", overwrite=True)
-    return fig, ax
+    return sru.plot_blobs_spectrum(
+        spec,
+        oot_models_blobs,
+        ind_bestfit,
+        ax=ax,
+        kind="exotune",
+        bestfit_color=bestfit_color,
+        color=color,
+        plot3sig=plot3sig,
+        plot2sig=plot2sig,
+        plot1sig=plot1sig,
+        plotmedian=plotmedian,
+        plotbestfit=plotbestfit,
+        legend_loc=legend_loc,
+        save_csv=save_csv,
+        results_folder=results_folder,
+        runname=runname)
 
 def plot_exotune_samples_res(spec, param, fitparanames,
                              ind_bestfit, post_burnin_samples, T_grid, logg_grid,
@@ -2182,8 +2043,7 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.5,
     """
     Generate a corner plot to visualize posterior distributions from MCMC samples.
 
-    This function wraps the `corner.corner` plotting with customization of styling, smoothing, quantiles, and
-    credible intervals.
+    This function wraps the `corner.corner` plotting and uses the master function from stellar_retrieval_utilities.py
 
     Parameters
     ----------
@@ -2218,15 +2078,20 @@ def plot_corner(samples, plotparams, plot_datapoints=False, smooth=1.5,
         The matplotlib figure object containing the corner plot.
     """
 
-    hist_kwargs["color"] = plotparams["hist_color"]
-    color = plotparams["hist_color"]
-    fig = corner.corner(samples, labels=plotparams["labels"],
-                        plot_datapoints=plot_datapoints, smooth=smooth,
-                        show_titles=show_titles, quantiles=quantiles,
-                        title_kwargs=title_kwargs, color=color,
-                        hist_kwargs=hist_kwargs, range=rg, 
-                        levels=levels, **kwargs)
-    return fig
+    return sru.plot_corner_master(
+        samples,
+        labels=plotparams["labels"],
+        color=plotparams["hist_color"],
+        plot_datapoints=plot_datapoints,
+        smooth=smooth,
+        quantiles=quantiles,
+        title_kwargs=title_kwargs,
+        hist_kwargs=hist_kwargs,
+        rg=rg,
+        show_titles=show_titles,
+        levels=levels,
+        **kwargs
+    )
 
 def plot_custom_corner(samples, fitparanames, parabestfit, param,gaussparanames,
                        hyperp_gausspriors,fitLogfSpotFac,hyperp_logpriors,T_grid,logg_grid):
@@ -2354,21 +2219,24 @@ def plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob, ind_bestfit,
     ax : matplotlib.axes.Axes
         The axis object containing the plot.
     """
+
+
     fig, ax = spec.plot()
-    param_bestfit = deepcopy(param)
-    for i, p in enumerate(fitparanames):
-        param_bestfit[p] = parabestfit[i]
-    ax.scatter(spec.wave, flat_st_ctm_models[ind_maxprob], label="Max. Probability", color="slateblue", alpha=1.)
-    ax.scatter(spec.wave, flat_st_ctm_models[ind_bestfit], label="Max. Likelihood", color="r", alpha=0.5, marker=".", s=50)
-
+    plt = ax.figure  # avoid flake warnings
+    # get y-range after base plot
     ymin, ymax = ax.get_ylim()
-    ax.text(np.max(spec.waveMax)+pad-pad/4, 0.95*ymax, format_param_str(param_bestfit, fitparanames), fontsize=8, color="k",ha="right", va="top")
+    # where to write: slightly inside the right padding, near top
+    text_x = np.max(spec.waveMax) + pad - pad / 4
+    text_y = 0.95 * ymax
 
-    ax.set_xlim(np.min(spec.waveMin)-pad/2, np.max(spec.waveMax)+pad)
+    return sru.plot_maxlike_and_maxprob(
+        spec, param, parabestfit, ind_maxprob, ind_bestfit, fitparanames, flat_st_ctm_models,
+        pad=pad,legend_loc=4,title="Best-fit model",best_label="Max. Likelihood",prob_label="Max. Probability",
+        best_color="r",prob_color="slateblue",best_alpha=0.5,prob_alpha=1.0,best_marker=".",prob_marker="o",
+        best_ms=50,prob_ms=30,show_param_text=True,formatter=format_param_str,
+        include_units=True,  text_xy=(text_x, text_y), text_fontsize=8,text_color="k",text_bbox=None,text_ha="right",
+        text_va="top")
 
-    ax.set_title("Best-fit model")
-    ax.legend(loc=4)
-    return fig, ax
 
 ## Multiprocessing tools
 

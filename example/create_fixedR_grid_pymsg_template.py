@@ -53,7 +53,7 @@ print(f'  lam [{specgrid.lam_min} -> {specgrid.lam_max}]')
 # range of params for the grid
 
 logg_range = [2.5,5.5] 
-Teff_range = [np.min([2300.-param["Tphot"], -100.])+param["Tphot"], param["Tphot"]+1000.] 
+Teff_range = [np.max([param["Tphot"]-1000, 2300.]), param["Tphot"]+1000.]
 loggstep = 0.1 #cgs
 Teffstep = 20. #K
 resPower_target = 10000

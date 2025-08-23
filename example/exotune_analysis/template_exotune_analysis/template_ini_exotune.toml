@@ -1,61 +1,61 @@
-[choice of inputs]
+[choice_of_inputs]
 
 # label for the observations being processed
-label_obs = test_visit
+label_obs = "test_visit"
 
 # whether to start from a time series of spectra, or from a spectrum file
-start_from_timeseries = False
+start_from_timeseries = false
 
 # whether to save the median spectrum that was created from the time series
-save_median_spectrum = False
+save_median_spectrum = false
 # path to save the median spectrum to
-path_save_median_spectrum = ../../observations/planetname/planet_outoftransit_spectrum.csv
+path_save_median_spectrum = "../../observations/planetname/planet_outoftransit_spectrum.csv"
 
 ## Only used if start_from_timeseries==True
 # path to stellar spectrum time series (where on your installation to find the data. Example with a Eureka! output format)
-path_to_stellar_spec_ts =
+path_to_stellar_spec_ts = ""
 
 ## Only used if start_from_timeseries==False
 # path to spectrum file
-path_to_spec = ../../observations/TRAPPIST_1_NIRSpec/exotune_templatespectrum.csv
+path_to_spec = "../../observations/TRAPPIST_1_NIRSpec/exotune_templatespectrum.csv"
 # format to read in the spectrum. create a new one in pystellspec.py if needed. Current options: ["MR_csv", "basic"]]
-spec_format = basic
+spec_format = "basic"
 
 # stellar models grid file path
-stmodfile = ../../R10000_model_grids/TRAPPIST_1_pymsg.h5
+stmodfile = "../../R10000_model_grids/TRAPPIST_1_pymsg.h5"
 
 [preprocessing]
 
 ## Plotting only (to help with choice of jd_range_mask)
 # whether to stop after initial processing instead of running MCMC
-optimize_param = False
+optimize_param = false
 
 # label for the choice of what is masked in the time and wavelength domains
-obsmaskpattern= nomask
+obsmaskpattern= "nomask"
 
 # ignored if starting from a spectrum and not a time series of spectra.
 # kernel size for *plotted* median-filtered light curve. Set to None for no smoothing.
 kern_size = 19
 
 # ignored if starting from a spectrum and not a time series of spectra.
-# JD range masked to construct spectrum. List of lists of intervals to mask as start1_end1|start2_end2...
-jd_range_mask =
+# JD range masked to construct spectrum. List of lists of intervals to mask as [[start1, end1],[start2,end2]]
+jd_range_mask = []
 
 # Mask custom wavelength range (user-defined, e.g. saturation). Same format as jd_range_mask.
-wave_range_mask =
+wave_range_mask = []
 
-[saving options]
+[saving_options]
 
 # whether to save the fit results to the output directory
-save_fit = True
+save_fit = true
 
 # suffix for all output files
-res_suffix = test_for_GitHub
+res_suffix = "test_for_GitHub"
 
-[stellar params]
+[stellar_params]
 
 # effective temperature in K
-Teffstar = 2566
+Teffstar = 2566.0
 
 # metallicity [Fe/H] in dex
 feh = 0.040
@@ -67,41 +67,41 @@ loggstar = 5.2396
 
 # Where to get the photosphere log g value from: user-specified value or pre-set loggstar
 # options: "value", "loggstar"
-logg_phot_source = value
+logg_phot_source = "value"
 # value to use if 'value' option was chosen
 logg_phot_value = 2.5
 
 
-[stellar models]
+[stellar_models]
 
 # label for the grid (used to label the run)
-label_grid = PHOENIX_TRAPPIST_1
+label_grid = "PHOENIX_TRAPPIST_1"
 
 # range of params for the grid
 
-# min_max
-logg_range = 2.5_5.5
+# [min,max]
+logg_range = [2.5,5.5]
 # grid step in cgs
 loggstep = 0.1
 
-# options are default or min_max. default assumes the default grid calculation setup, with
-# min = np.min([2300.-Teffstar, -100.])+Teffstar and max=Teffstar+1000.
-Teff_range = default
+# options are default or [min,max]. default assumes the default grid calculation setup, with
+# min = np.max([Teffstar-1000, 2300.]) and max=Teffstar+1000.
+Teff_range = "default"
 
 # grid step in K
-Teffstep = 20.
+Teffstep = 20.0
 
 # resolving power at which the grid was calculated
 resPower_target = 10000
 
 # wavelength edges for the grid calculation
-wave_range = 0.2_5.4
+wave_range = [0.2,5.4]
 
 
-[MCMC params]
+[MCMC_params]
 
 # whether to run the MCMC in parallel
-parallel = True
+parallel = true
 
 # number of cpu to run the MCMC on
 ncpu = 30
@@ -114,37 +114,37 @@ frac_burnin = 0.6
 ## Which parameters to fit
 
 # whether to fit heterogeneity fractions
-fitspot = True
-fitfac = True
+fitspot = true
+fitfac = true
 
 # whether to fit temperatures of spectral components
-fitThet = True
-fitTphot = True
+fitThet = true
+fitTphot = true
 
 # whether to fit log g of spectral components
-fitlogg_phot = True
-fitlogg_het = True
+fitlogg_phot = true
+fitlogg_het = true
 
 ## Options for handling of the data
 # whether to fit a scaling factor to the model flux
-fitFscale = True
+fitFscale = true
 # whether to fit an error inflation factor
-fiterrInfl = True
+fiterrInfl = true
 
 
 [priors]
 
 # list of parameters with Gaussian priors. For multiple params sep. with '_': e.g. Tphot_ffac. Otherwise leave empty.
-gaussparanames = Tphot
+gaussparanames = "Tphot"
 # mean and std of the Gaussian prior. For multiple parameters separate with '|': e.g. mean1_std1|mean2_std2
 # leave empty if no gaussparanames.
-hyperp_gausspriors = 2566_70
+hyperp_gausspriors = [2566,70]
 
 # specify whether we want to fit fspot/ffac with prior uniform in log or lin space
-# (e.g. 0_0: both in lin space; 1_0: fspot in log space, ffac in lin space)
-fitLogfSpotFac = 0_0
+# (e.g. [0,0]: both in lin space; [1,0]: fspot in log space, ffac in lin space)
+fitLogfSpotFac = [0,0]
 # lower and upper bound of the log(prior) on the heterogeneity fraction(s).
-hyperp_logpriors = -5_0
+hyperp_logpriors = [-5,0]
 
 [plotting]
 

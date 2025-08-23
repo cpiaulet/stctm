@@ -34,7 +34,7 @@ import astropy.table as table
 import sys
 import astropy.io as aio
 from matplotlib.gridspec import GridSpec
-
+from pathlib import Path
 
 ## The main code starts here
 
@@ -48,12 +48,21 @@ def main(argv):
         iniFile = argv[1]
     else:
         iniFile = 'template_ini_exotune.ini'
-
     if not os.path.exists(iniFile):
         raise FileNotFoundError('USER ERROR: iniFile does not exist.')
 
     params, label_run = xtu.parse_all_input_exotune_iniFile(iniFile)
     print("\nStarting Run:", label_run)
+
+    ini_path = Path(iniFile).resolve()
+    ini_dir = ini_path.parent
+    results_root = (ini_dir / "../../exotune_results").resolve()
+
+    # Folder for the early "optimize_param" exit
+    res_suffix = params["res_suffix"]  # used later
+    pre_runname = f"preprocessOnly{label_run}_{res_suffix}"
+    pre_results_folder = results_root / pre_runname
+    pre_results_folder.mkdir(parents=True, exist_ok=True)
 
     ## Pre-processing
     if params["start_from_timeseries"]:
@@ -98,20 +107,29 @@ def main(argv):
     Fscale_guess, fl_phot_spot_fac, fig3 = xtu.calc_and_plot_Fscale_guess(param, Teffs_grid, loggs_grid,  wv_template_thisR, models_grid_fixedR, spec)
 
     ##  Stop here if you just wanted to update your data selection
-    res_suffix = params["res_suffix"]
+    # Early exit
     if params["optimize_param"]:
-        this_dir = os.getcwd()+"/"
-        print("\nSaving previously-created figures...")
+        print("\nSaving previously-created figures (preprocessOnly)...")
         if params["start_from_timeseries"]:
-            fig1.savefig(this_dir + "exotune_select_time_"+res_suffix+'_preprocessOnly.png')
+            fig1.savefig(str(pre_results_folder / f"exotune_select_time_{res_suffix}_preprocessOnly.png"))
             plt.close(fig1)
-        fig2.savefig(this_dir + "exotune_select_wave_"+res_suffix+'_preprocessOnly.png')
+        fig2.savefig(str(pre_results_folder / f"exotune_select_wave_{res_suffix}_preprocessOnly.png"))
         plt.close(fig2)
-        fig3.savefig(this_dir + "exotune_get_fscale_"+res_suffix+'_preprocessOnly.png')
+        fig3.savefig(str(pre_results_folder / f"exotune_get_fscale_{res_suffix}_preprocessOnly.png"))
         plt.close(fig3)
 
-        print("\nStopping here, parameters were optimized!")
+        # snapshot the runner/ini/util files here as well
+        this_script_path = Path(__file__).resolve()
+        utils_script_path = Path(xtu.__file__).resolve()
+        xtu.save_ref_files(
+            "",
+            str(this_script_path),
+            str(ini_path),
+            str(utils_script_path),
+            str(pre_results_folder) + os.sep
+        )
 
+        print("\nStopping here, parameters were optimized!")
         sys.exit()
 
     ##  Initialize for MCMC
@@ -123,24 +141,27 @@ def main(argv):
         print("\n** Fitparanames:", fitparanames)
         print("\n** Param: ", param)
 
-        runname = "fit"+label_run
+        runname = "fit" + label_run
         for p in fitparanames:
-            runname = runname + "_"+p
-        runname = runname + "_"+res_suffix
-        res_dir = "../../exotune_results/"+runname+"/"
-        print("\nResults folder:", res_dir)
+            runname = runname + "_" + p
+        runname = runname + "_" + res_suffix
 
-        # Setup for post-processing
-        if not os.path.isdir(res_dir):
-           os.makedirs(res_dir)
+        # --- results path location rel. to ini file ---
+        results_folder = results_root / runname
+        print("\nResults folder:", str(results_folder))
+        results_folder.mkdir(parents=True, exist_ok=True)
 
-        #** Get .py files used to run this case
-        this_dir = os.getcwd()+"/"
-        this_script = __file__.split(os.sep)[-1]
-        utils_script = str(xtu.__file__)
+        # save directory
+        res_dir = str(results_folder) + os.sep
 
-
-        xtu.save_ref_files(this_dir, this_script, iniFile, utils_script, res_dir)
+        # --- reference files to save ---
+        this_script_path = Path(__file__).resolve()
+        utils_script_path = Path(xtu.__file__).resolve()
+        this_dir = ""  # IMPORTANT
+        this_script = str(this_script_path)  # absolute path
+        iniFile_fp = str(ini_path)  # absolute path
+        utils_script = str(utils_script_path)  # absolute path
+        xtu.save_ref_files(this_dir, this_script, iniFile_fp, utils_script, res_dir)
 
 
     ##  Plot fitted spectrum
@@ -149,7 +170,8 @@ def main(argv):
 
         # plot spectrum
         fig, ax = spec.plot()
-        fig.savefig(res_dir + "exotune_fitted_spectrum.pdf")
+        fig.savefig(str(results_folder / "exotune_fitted_spectrum.pdf"))
+
         plt.close(fig)
 
     ##  define parameters for emcee run
@@ -224,12 +246,12 @@ def main(argv):
 
         fig, axes = xtu.chainplot(sampler.chain[:, burnin:, :], labels=fitparanames)
         if params["save_fit"]:
-            fig.savefig(res_dir + "exotune_chainplot_noburnin_"+runname+'.png')
+            fig.savefig(str(results_folder / f"exotune_chainplot_noburnin_{runname}.png"))
             plt.close(fig)
 
         fig, axes = xtu.chainplot(sampler.chain[:, :, :], labels=fitparanames)
         if params["save_fit"]:
-            fig.savefig(res_dir + "exotune_chainplot_"+runname+'.png')
+            fig.savefig(str(results_folder / f"exotune_chainplot_{runname}.png"))
             plt.close(fig)
 
     ##
@@ -307,13 +329,13 @@ def main(argv):
         print("\nSaving blobs...")
         # Blobs
         blobs = sampler.get_blobs()
-        if params["ncpu"]>1:
-            # Close the thread pool
-            pool.close()
-            pool.join()
+        # if params["ncpu"]>1: # should not be necessary given the "with" above
+        #     # Close the thread pool
+        #     pool.close()
+        #     pool.join()
         flat_oot_spec_models = blobs.T[:, burnin:]["oot_spec_model"].reshape((-1))
         if params["save_fit"]:
-            np.save(res_dir+"oot_spec_model_blobs_"+runname+".npy", flat_oot_spec_models)
+            np.save(str(results_folder / f"oot_spec_model_blobs_{runname}.npy"), flat_oot_spec_models)
 
         print("\nPlotting best fit model with observations...")
         fig, ax = xtu.plot_maxlike_and_maxprob(spec, param, parabestfit, ind_maxprob,
@@ -331,7 +353,7 @@ def main(argv):
         print("\nSaving default parameters to file...")
         t_defaultparam = table.Table([param])
         if params["save_fit"]:
-            aio.ascii.write(t_defaultparam, res_dir+"exotune_defaultparams_"+runname+'.csv', format='csv', overwrite=True)
+            aio.ascii.write(t_defaultparam, str(results_folder / f"exotune_defaultparams_{runname}.csv"), overwrite=True)
 
         oot_spec_models = np.array([flat_oot_spec_models[i] for i in range(flat_oot_spec_models.size)])
 
@@ -450,3 +472,9 @@ if __name__ == "__main__":
     main(sys.argv)
 
 
+# To use instead the CLI entry point
+def run_from_ini(ini_path=None):
+    argv = ["stctm_exotune"]
+    if ini_path:
+        argv.append(ini_path)
+    return int(main(argv) or 0)
