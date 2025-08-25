@@ -1,5 +1,5 @@
 ---
-title: 'STCTM: a forward modeling and retrieval framework for stellar contamination and stellar spectra'
+title: "STCTM: a forward modeling and retrieval framework for stellar contamination and stellar spectra"
 tags:
   - Python
   - Astronomy
@@ -11,11 +11,11 @@ tags:
 authors:
   - name: Caroline Piaulet-Ghorayeb
     orcid: 0000-0002-2875-917X
-    affiliation: "1,2"
+    affiliation: "1, 2"
 affiliations:
-  - name: Department of Astronomy \& Astrophysics, University of Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA
+  - name: "Department of Astronomy & Astrophysics, University of Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA"
     index: 1
-  - name: E. Margaret Burbridge Prize Postdoctoral Fellow
+  - name: "E. Margaret Burbidge Prize Postdoctoral Fellow"
     index: 2
 date: 2025-05-05
 bibliography: paper.bib
