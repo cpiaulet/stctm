@@ -17,9 +17,8 @@ affiliations:
     index: 1
   - name: E. Margaret Burbridge Prize Postdoctoral Fellow
     index: 2
-date: 05 May 2025
+date: 2025-05-05
 bibliography: paper.bib
-
 ---
 
 # Summary
