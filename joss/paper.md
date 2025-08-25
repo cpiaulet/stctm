@@ -10,8 +10,6 @@ tags:
   - JWST
 authors:
   - name: Caroline Piaulet-Ghorayeb
-    given-names: Caroline
-    family-names: Piaulet-Ghorayeb
     orcid: 0000-0002-2875-917X
     affiliation: "1, 2"
 affiliations:
@@ -19,7 +17,7 @@ affiliations:
     index: 1
   - name: "E. Margaret Burbidge Prize Postdoctoral Fellow"
     index: 2
-date: 2025-05-05
+date: 05 May 2025
 bibliography: paper.bib
 ---
 
