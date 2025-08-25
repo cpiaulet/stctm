@@ -29,7 +29,7 @@ If inhomogeneously distributed throughout the photosphere, this phenomenon can g
 Specifically, the TLSE describes the fact that spectral contrasts between bright and dark spots at the stellar surface outside of the transit chord can leave wavelength-dependent imprints in transmission spectra that may be mistaken for planetary atmosphere absorption.  
 
 As the field becomes increasingly ambitious in the search for signs of even thin atmospheres on small exoplanets, the TLSE is becoming a limiting factor, and it becomes imperative to develop robust inference methods to disentangle planetary and stellar contributions to the observed spectra.
-Here, I present `stctm`, a flexible Bayesian retrieval framework to model the impact of the TLSE on any exoplanet transmission spectrum, and infer the range of stellar surface parameters that are compatible with the observations in the absence of any planetary contribution. 
+Here, I present `stctm`, the STellar ConTamination Modeling framework, a flexible Bayesian retrieval framework to model the impact of the TLSE on any exoplanet transmission spectrum, and infer the range of stellar surface parameters that are compatible with the observations in the absence of any planetary contribution. 
 With the `exotune` sub-module, users can also perform retrievals directly on out-of-transit stellar spectra in order to place data-driven priors on the extent to which the TLSE can impact any planet's transmission spectrum.
 The input data formats, stellar models, and fitted parameters are easily tunable using human-readable files and the code is fully parallelized to enable fast inferences. 
 
@@ -42,7 +42,7 @@ While some forward models have been developed to simulate the impact of stellar 
 `stctm` addresses this need by providing an open-source, modular, and user-friendly framework. It allows users to model a wide range of stellar surface configurations leveraging any spectral models, and to infer which stellar parameters could explain observations without invoking planetary absorption. It also supports retrievals on out-of-transit stellar spectra to independently assess the extent of potential stellar contamination by the host star. By enabling flexible, fast, and reproducible inference of the TLSE, `stctm` empowers the community to critically assess the reliability of exoplanet atmosphere detections.
 
 # Main features of the code
-The user inputs are communicated to the code via an input `.ini` file for both TLSE retrievals and inferences from out-of-transit stellar spectra.
+The user inputs are communicated to the code via an input `.toml` file for both TLSE retrievals and inferences from out-of-transit stellar spectra.
 The code follows similar phases for both types of retrievals:
 
 - Reading in and parsing of the inputs (data file, stellar models file, saving options, MCMC fit setup)
@@ -75,7 +75,7 @@ Here are a few open-source codes that offer functionalities focused on retrieval
 - Retrievals on out-of-transit stellar spectra (Nested Sampling, serial run mode only): `StellarFit` [@Radica:2025]
 
 # Acknowledgements
-`stctm` relies heavily on other Python libraries which include `numpy` [@harris2020array], `scipy` [@2020SciPy-NMeth], `astropy` [@astropy:2013; @astropy:2018], `matplotlib` [@Hunter:2007], `pandas`[@pandas:2020], `emcee`[@ForemanMackey:2013], `corner` [@corner], and `pysynphot` [@pysynphot]. 
+CPG thanks Warrick Ball for pre-review suggestions that improved the code documentation and ease of set-up for the user.`stctm` relies heavily on other Python libraries which include `numpy` [@harris2020array], `scipy` [@2020SciPy-NMeth], `astropy` [@astropy:2013; @astropy:2018], `matplotlib` [@Hunter:2007], `pandas`[@pandas:2020], `emcee`[@ForemanMackey:2013], `corner` [@corner], and `pysynphot` [@pysynphot]. 
 Users are also strongly encouraged to use `msg`[@Townsend:2023] to obtain the grids of stellar models used in the inference step. 
 
 CPG also acknowledges support from the E. Margaret Burbidge Prize Postdoctoral Fellowship from the Brinson Foundation.
