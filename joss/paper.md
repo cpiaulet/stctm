@@ -10,6 +10,8 @@ tags:
   - JWST
 authors:
   - name: Caroline Piaulet-Ghorayeb
+    given-names: Caroline
+    family-names: Piaulet-Ghorayeb
     orcid: 0000-0002-2875-917X
     affiliation: "1, 2"
 affiliations:
