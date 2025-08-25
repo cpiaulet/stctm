@@ -1,0 +1,692 @@
+\documentclass[10pt,a4paper,onecolumn]{article}
+\usepackage{marginnote}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{authblk,etoolbox}
+\usepackage{titlesec}
+\usepackage{calc}
+\usepackage{tikz}
+\usepackage{hyperref}
+\hypersetup{colorlinks,breaklinks=true,
+            urlcolor=[rgb]{0.0, 0.5, 1.0},
+            linkcolor=[rgb]{0.0, 0.5, 1.0}}
+\usepackage{caption}
+\usepackage{tcolorbox}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{seqsplit}
+\usepackage{xstring}
+
+\usepackage{float}
+\let\origfigure\figure
+\let\endorigfigure\endfigure
+\renewenvironment{figure}[1][2] {
+    \expandafter\origfigure\expandafter[H]
+} {
+    \endorigfigure
+}
+
+
+\usepackage{fixltx2e} % provides \textsubscript
+\usepackage[
+  backend=biber,
+%  style=alphabetic,
+%  citestyle=numeric
+]{biblatex}
+\bibliography{paper.bib}
+
+% --- Splitting \texttt --------------------------------------------------
+
+\let\textttOrig=\texttt
+\def\texttt#1{\expandafter\textttOrig{\seqsplit{#1}}}
+\renewcommand{\seqinsert}{\ifmmode
+  \allowbreak
+  \else\penalty6000\hspace{0pt plus 0.02em}\fi}
+
+
+% --- Pandoc does not distinguish between links like [foo](bar) and
+% --- [foo](foo) -- a simplistic Markdown model.  However, this is
+% --- wrong:  in links like [foo](foo) the text is the url, and must
+% --- be split correspondingly.
+% --- Here we detect links \href{foo}{foo}, and also links starting
+% --- with https://doi.org, and use path-like splitting (but not
+% --- escaping!) with these links.
+% --- Another vile thing pandoc does is the different escaping of
+% --- foo and bar.  This may confound our detection.
+% --- This problem we do not try to solve at present, with the exception
+% --- of doi-like urls, which we detect correctly.
+
+
+\makeatletter
+\let\href@Orig=\href
+\def\href@Urllike#1#2{\href@Orig{#1}{\begingroup
+    \def\Url@String{#2}\Url@FormatString
+    \endgroup}}
+\def\href@Notdoi#1#2{\def\tempa{#1}\def\tempb{#2}%
+  \ifx\tempa\tempb\relax\href@Urllike{#1}{#2}\else
+  \href@Orig{#1}{#2}\fi}
+\def\href#1#2{%
+  \IfBeginWith{#1}{https://doi.org}%
+  {\href@Urllike{#1}{#2}}{\href@Notdoi{#1}{#2}}}
+\makeatother
+
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newenvironment{CSLReferences}[3] % #1 hanging-ident, #2 entry spacing
+ {% don't indent paragraphs
+  \setlength{\parindent}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1 \everypar{\setlength{\hangindent}{\cslhangindent}}\ignorespaces\fi
+  % set entry spacing
+  \ifnum #2 > 0
+  \setlength{\parskip}{#2\baselineskip}
+  \fi
+ }%
+ {}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{#1\hfill\break}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{#1}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{#1}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+
+% --- Page layout -------------------------------------------------------------
+\usepackage[top=3.5cm, bottom=3cm, right=1.5cm, left=1.0cm,
+            headheight=2.2cm, reversemp, includemp, marginparwidth=4.5cm]{geometry}
+
+% --- Default font ------------------------------------------------------------
+\renewcommand\familydefault{\sfdefault}
+
+% --- Style -------------------------------------------------------------------
+\renewcommand{\bibfont}{\small \sffamily}
+\renewcommand{\captionfont}{\small\sffamily}
+\renewcommand{\captionlabelfont}{\bfseries}
+
+% --- Section/SubSection/SubSubSection ----------------------------------------
+\titleformat{\section}
+  {\normalfont\sffamily\Large\bfseries}
+  {}{0pt}{}
+\titleformat{\subsection}
+  {\normalfont\sffamily\large\bfseries}
+  {}{0pt}{}
+\titleformat{\subsubsection}
+  {\normalfont\sffamily\bfseries}
+  {}{0pt}{}
+\titleformat*{\paragraph}
+  {\sffamily\normalsize}
+
+
+% --- Header / Footer ---------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+%\renewcommand{\headrulewidth}{0.50pt}
+\renewcommand{\headrulewidth}{0pt}
+\fancyhead[L]{\hspace{-0.75cm}\includegraphics[width=5.5cm]{/usr/local/share/openjournals/joss/logo.png}}
+\fancyhead[C]{}
+\fancyhead[R]{}
+\renewcommand{\footrulewidth}{0.25pt}
+
+\fancyfoot[L]{\parbox[t]{0.98\headwidth}{\footnotesize{\sffamily ¿citation\_author?, (2025). STCTM:
+a forward modeling and retrieval framework for stellar contamination and
+stellar
+spectra. \textit{Journal of Open Source Software}, ¿VOL?(¿ISSUE?), ¿PAGE?. \url{https://doi.org/DOI unavailable}}}}
+
+
+\fancyfoot[R]{\sffamily \thepage}
+\makeatletter
+\let\ps@plain\ps@fancy
+\fancyheadoffset[L]{4.5cm}
+\fancyfootoffset[L]{4.5cm}
+
+% --- Macros ---------
+
+\definecolor{linky}{rgb}{0.0, 0.5, 1.0}
+
+\newtcolorbox{repobox}
+   {colback=red, colframe=red!75!black,
+     boxrule=0.5pt, arc=2pt, left=6pt, right=6pt, top=3pt, bottom=3pt}
+
+\newcommand{\ExternalLink}{%
+   \tikz[x=1.2ex, y=1.2ex, baseline=-0.05ex]{%
+       \begin{scope}[x=1ex, y=1ex]
+           \clip (-0.1,-0.1)
+               --++ (-0, 1.2)
+               --++ (0.6, 0)
+               --++ (0, -0.6)
+               --++ (0.6, 0)
+               --++ (0, -1);
+           \path[draw,
+               line width = 0.5,
+               rounded corners=0.5]
+               (0,0) rectangle (1,1);
+       \end{scope}
+       \path[draw, line width = 0.5] (0.5, 0.5)
+           -- (1, 1);
+       \path[draw, line width = 0.5] (0.6, 1)
+           -- (1, 1) -- (1, 0.6);
+       }
+   }
+
+% --- Title / Authors ---------------------------------------------------------
+% patch \maketitle so that it doesn't center
+\patchcmd{\@maketitle}{center}{flushleft}{}{}
+\patchcmd{\@maketitle}{center}{flushleft}{}{}
+% patch \maketitle so that the font size for the title is normal
+\patchcmd{\@maketitle}{\LARGE}{\LARGE\sffamily}{}{}
+% patch the patch by authblk so that the author block is flush left
+\def\maketitle{{%
+  \renewenvironment{tabular}[2][]
+    {\begin{flushleft}}
+    {\end{flushleft}}
+  \AB@maketitle}}
+\makeatletter
+\renewcommand\AB@affilsepx{ \protect\Affilfont}
+%\renewcommand\AB@affilnote[1]{{\bfseries #1}\hspace{2pt}}
+\renewcommand\AB@affilnote[1]{{\bfseries #1}\hspace{3pt}}
+\renewcommand{\affil}[2][]%
+   {\newaffiltrue\let\AB@blk@and\AB@pand
+      \if\relax#1\relax\def\AB@note{\AB@thenote}\else\def\AB@note{#1}%
+        \setcounter{Maxaffil}{0}\fi
+        \begingroup
+        \let\href=\href@Orig
+        \let\texttt=\textttOrig
+        \let\protect\@unexpandable@protect
+        \def\thanks{\protect\thanks}\def\footnote{\protect\footnote}%
+        \@temptokena=\expandafter{\AB@authors}%
+        {\def\\{\protect\\\protect\Affilfont}\xdef\AB@temp{#2}}%
+         \xdef\AB@authors{\the\@temptokena\AB@las\AB@au@str
+         \protect\\[\affilsep]\protect\Affilfont\AB@temp}%
+         \gdef\AB@las{}\gdef\AB@au@str{}%
+        {\def\\{, \ignorespaces}\xdef\AB@temp{#2}}%
+        \@temptokena=\expandafter{\AB@affillist}%
+        \xdef\AB@affillist{\the\@temptokena \AB@affilsep
+          \AB@affilnote{\AB@note}\protect\Affilfont\AB@temp}%
+      \endgroup
+       \let\AB@affilsep\AB@affilsepx
+}
+\makeatother
+\renewcommand\Authfont{\sffamily\bfseries}
+\renewcommand\Affilfont{\sffamily\small\mdseries}
+\setlength{\affilsep}{1em}
+
+
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+    \usepackage{fontspec}
+
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={STCTM: a forward modeling and retrieval framework for stellar contamination and stellar spectra},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+
+% --- We redefined \texttt, but in sections and captions we want the
+% --- old definition
+\let\addcontentslineOrig=\addcontentsline
+\def\addcontentsline#1#2#3{\bgroup
+  \let\texttt=\textttOrig\addcontentslineOrig{#1}{#2}{#3}\egroup}
+\let\markbothOrig\markboth
+\def\markboth#1#2{\bgroup
+  \let\texttt=\textttOrig\markbothOrig{#1}{#2}\egroup}
+\let\markrightOrig\markright
+\def\markright#1{\bgroup
+  \let\texttt=\textttOrig\markrightOrig{#1}\egroup}
+
+
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+\title{STCTM: a forward modeling and retrieval framework for stellar
+contamination and stellar spectra}
+
+        \author[1,2]{Caroline Piaulet-Ghorayeb}
+    
+      \affil[1]{Department of Astronomy \& Astrophysics, University of
+Chicago, 5640 South Ellis Avenue, Chicago, IL 60637, USA}
+      \affil[2]{E. Margaret Burbridge Prize Postdoctoral Fellow}
+  \date{\vspace{-7ex}}
+
+\begin{document}
+\maketitle
+
+\marginpar{
+
+  \begin{flushleft}
+  %\hrule
+  \sffamily\small
+
+  {\bfseries DOI:} \href{https://doi.org/DOI unavailable}{\color{linky}{DOI unavailable}}
+
+  \vspace{2mm}
+
+  {\bfseries Software}
+  \begin{itemize}
+    \setlength\itemsep{0em}
+    \item \href{N/A}{\color{linky}{Review}} \ExternalLink
+    \item \href{NO_REPOSITORY}{\color{linky}{Repository}} \ExternalLink
+    \item \href{DOI unavailable}{\color{linky}{Archive}} \ExternalLink
+  \end{itemize}
+
+  \vspace{2mm}
+
+  \par\noindent\hrulefill\par
+
+  \vspace{2mm}
+
+  {\bfseries Editor:} \href{https://example.com}{Pending
+Editor} \ExternalLink \\
+  \vspace{1mm}
+    {\bfseries Reviewers:}
+  \begin{itemize}
+  \setlength\itemsep{0em}
+    \item \href{https://github.com/Pending Reviewers}{@Pending
+Reviewers}
+    \end{itemize}
+    \vspace{2mm}
+
+  {\bfseries Submitted:} N/A\\
+  {\bfseries Published:} N/A
+
+  \vspace{2mm}
+  {\bfseries License}\\
+  Authors of papers retain copyright and release the work under a Creative Commons Attribution 4.0 International License (\href{http://creativecommons.org/licenses/by/4.0/}{\color{linky}{CC BY 4.0}}).
+
+  
+  \end{flushleft}
+}
+
+\hypertarget{summary}{%
+\section{Summary}\label{summary}}
+
+Transmission spectroscopy is a key avenue for the near-term study of
+small-planet atmospheres and the most promising method when it comes to
+searching for atmospheres on temperate rocky worlds, which are often too
+cold for planetary emission to be detectable. At the same time, the
+small planets that are most amenable for such atmospheric probes orbit
+small M dwarf stars. This ``M-dwarf opportunity'' has encountered a
+major challenge because of late-type stars' magnetic activity, which
+lead to the formation of spots and faculae at their surface. If
+inhomogeneously distributed throughout the photosphere, this phenomenon
+can give rise to ``stellar contamination,'' or the transit light source
+effect (TLSE). Specifically, the TLSE describes the fact that spectral
+contrasts between bright and dark spots at the stellar surface outside
+of the transit chord can leave wavelength-dependent imprints in
+transmission spectra that may be mistaken for planetary atmosphere
+absorption.
+
+As the field becomes increasingly ambitious in the search for signs of
+even thin atmospheres on small exoplanets, the TLSE is becoming a
+limiting factor, and it becomes imperative to develop robust inference
+methods to disentangle planetary and stellar contributions to the
+observed spectra. Here, I present \texttt{stctm}, a flexible Bayesian
+retrieval framework to model the impact of the TLSE on any exoplanet
+transmission spectrum, and infer the range of stellar surface parameters
+that are compatible with the observations in the absence of any
+planetary contribution. With the \texttt{exotune} sub-module, users can
+also perform retrievals directly on out-of-transit stellar spectra in
+order to place data-driven priors on the extent to which the TLSE can
+impact any planet's transmission spectrum. The input data formats,
+stellar models, and fitted parameters are easily tunable using
+human-readable files and the code is fully parallelized to enable fast
+inferences.
+
+\hypertarget{statement-of-need}{%
+\section{Statement of need}\label{statement-of-need}}
+
+The interpretation of high-precision exoplanet transmission spectra from
+facilities such as the Hubble Space Telescope (HST) and the James Webb
+Space Telescope (JWST) is increasingly dependent on a robust accounting
+for the effects of stellar contamination, particularly for small planets
+orbiting small stars. Despite a growing awareness of the Transit Light
+Source Effect (TLSE; (Rackham et al., 2018; TRAPPIST-1 JWST Community
+Initiative et al., 2024)), the community currently lacks flexible,
+open-source tools that allow for robust modeling and retrieval of
+stellar contamination signatures. Further, uncertainties in stellar
+models motivate flexible implementations with reproducible model setups
+supporting any user-specified stellar model source, such as PHOENIX or
+SPHINX model grids (Husser et al., 2013; Iyer et al., 2023).
+
+While some forward models have been developed to simulate the impact of
+stellar heterogeneity on transmission spectra, these tools are either
+not publicly available, computationally intractable due to their
+serial-mode-only implementation, part of much larger codes that require
+more advanced user training (e.g.~atmospheric retrievals), or not
+designed for inference. Further, the community lacks frameworks that
+enable to retrieve stellar surface properties from both observed
+planetary transmission spectra and out-of-transit stellar spectra in a
+Bayesian context. This gap limits our ability to quantify uncertainties
+in exoplanet atmospheric properties and to test the robustness of
+atmospheric detections.
+
+\texttt{stctm} addresses this need by providing an open-source, modular,
+and user-friendly framework. It allows users to model a wide range of
+stellar surface configurations leveraging any spectral models, and to
+infer which stellar parameters could explain observations without
+invoking planetary absorption. It also supports retrievals on
+out-of-transit stellar spectra to independently assess the extent of
+potential stellar contamination by the host star. By enabling flexible,
+fast, and reproducible inference of the TLSE, \texttt{stctm} empowers
+the community to critically assess the reliability of exoplanet
+atmosphere detections.
+
+\hypertarget{main-features-of-the-code}{%
+\section{Main features of the code}\label{main-features-of-the-code}}
+
+The user inputs are communicated to the code via an input \texttt{.ini}
+file for both TLSE retrievals and inferences from out-of-transit stellar
+spectra. The code follows similar phases for both types of retrievals:
+
+\begin{itemize}
+\tightlist
+\item
+  Reading in and parsing of the inputs (data file, stellar models file,
+  saving options, MCMC fit setup)
+\item
+  Running the MCMC fit
+\item
+  Post-processing to create diagnostic plots, record model comparison
+  and goodness-of-fit metrics, produce publication-ready figures, and
+  store sample spectra and parameters for post-processing and
+  publication support and reproducibility (e.g.~Zenodo)
+\end{itemize}
+
+\texttt{exotune} retrievals on out-of-transit stellar spectra have an
+additional (optional) pre-processing step, allowing users to:
+
+\begin{itemize}
+\tightlist
+\item
+  start from a full time-series of spectra as the input (e.g.~the output
+  from Stage 3 of the \texttt{Eureka!}(Bell et al., 2022) pipeline which
+  is widely used in the community), rather than simply a pre-computed
+  stellar spectrum
+\item
+  exclude certain time intervals/exposures (e.g.~containing the transit)
+  and wavelength ranges (e.g.~saturated regions) when computing the
+  median spectrum to perform the retrieval over
+\end{itemize}
+
+For \texttt{exotune} retrievals, an error inflation parameter can be
+leveraged to account for the often-large mismatch between the data and
+stellar models.
+
+\hypertarget{documentation}{%
+\section{Documentation}\label{documentation}}
+
+The full documentation for \texttt{stctm} with installation, testing
+instructions, and real-data example retrievals on transmission spectra
+and out-of-transit stellar spectra are available at
+\url{https://stctm.readthedocs.io/}. A description of \texttt{stctm} can
+be found in several of the early papers that employed it (see next
+section).
+
+\hypertarget{uses-of-stctm-in-the-literature}{%
+\section{Uses of STCTM in the
+literature}\label{uses-of-stctm-in-the-literature}}
+
+\texttt{stctm} has been applied widely to the interpretation of
+transmission spectra of rocky planets and small sub-Neptunes, including
+in (Ahrer et al., 2025; Lim et al., 2023; Piaulet-Ghorayeb et al., 2025,
+2024; Radica et al., 2025; Roy et al., 2023).
+
+\hypertarget{future-developments}{%
+\section{Future Developments}\label{future-developments}}
+
+The latest version of \texttt{stctm} at the time of writing (v2.1.1)
+supports MCMC retrievals on transmission spectra and on out-of-transit
+stellar spectra (\texttt{exotune}), and provides model comparison
+statistics, model and parameter samples as well as publication-ready
+figures. Future versions will expand on these functionalities to include
+user-friendly scripts tailored to post-processing only for an
+already-run retrieval (creating custom plots), as well as a Nested
+Sampling alternative for the retrievals. Users are encouraged to propose
+or contribute any other features.
+
+\hypertarget{similar-tools}{%
+\section{Similar Tools}\label{similar-tools}}
+
+Here are a few open-source codes that offer functionalities focused on
+retrievals of the TLSE or on out-of-transit stellar spectra:
+
+\begin{itemize}
+\tightlist
+\item
+  Generic atmospheric retrievals (including TLSE-only retrievals on
+  transmission spectra): \texttt{POSEIDON} (MacDonald \& Madhusudhan,
+  2024)
+\item
+  Retrievals on out-of-transit stellar spectra (Nested Sampling, serial
+  run mode only): \texttt{StellarFit} (Radica et al., 2025)
+\end{itemize}
+
+\hypertarget{acknowledgements}{%
+\section{Acknowledgements}\label{acknowledgements}}
+
+\texttt{stctm} relies heavily on other Python libraries which include
+\texttt{numpy} (Harris et al., 2020), \texttt{scipy} (Virtanen et al.,
+2020), \texttt{astropy} (Astropy Collaboration et al., 2018, 2013),
+\texttt{matplotlib} (Hunter, 2007), \texttt{pandas}(team, 2020),
+\texttt{emcee}(Foreman-Mackey et al., 2013), \texttt{corner}
+(Foreman-Mackey, 2016), and \texttt{pysynphot} (Horne, 2013). Users are
+also strongly encouraged to use \texttt{msg}(Townsend \& Lopez, 2023) to
+obtain the grids of stellar models used in the inference step.
+
+CPG also acknowledges support from the E. Margaret Burbidge Prize
+Postdoctoral Fellowship from the Brinson Foundation. She thanks R.
+MacDonald, O. Lim, and M. Radica for helpful conversations that helped
+shape \texttt{stctm}.
+
+\hypertarget{references}{%
+\section*{References}\label{references}}
+\addcontentsline{toc}{section}{References}
+
+\hypertarget{refs}{}
+\begin{CSLReferences}{1}{0}
+\leavevmode\hypertarget{ref-Ahrer:2025}{}%
+Ahrer, E.-M., Radica, M., Piaulet-Ghorayeb, C., Raul, E., Wiser, L. S.,
+Welbanks, L., Acuna, L., Allart, R., Coulombe, L.-P., Louca, A. J.,
+MacDonald, R. J., Saidel, M., Evans-Soma, T. M., Benneke, B., Christie,
+D., Beatty, T. G., Cadieux, C., Cloutier, R., Doyon, R., \ldots{}
+Schlichting, H. E. (2025). Escaping helium and a highly muted spectrum
+suggest a metal-enriched atmosphere on sub-neptune GJ3090b from JWST
+transit spectroscopy. \emph{arXiv e-Prints}, arXiv:2504.20428.
+\url{https://doi.org/10.48550/arXiv.2504.20428}
+
+\leavevmode\hypertarget{ref-astropy:2018}{}%
+Astropy Collaboration, Price-Whelan, A. M., Sipőcz, B. M., Günther, H.
+M., Lim, P. L., Crawford, S. M., Conseil, S., Shupe, D. L., Craig, M.
+W., Dencheva, N., Ginsburg, A., VanderPlas, J. T., Bradley, L. D.,
+Pérez-Suárez, D., de Val-Borro, M., Aldcroft, T. L., Cruz, K. L.,
+Robitaille, T. P., Tollerud, E. J., \ldots{} Astropy Contributors.
+(2018). {The Astropy Project: Building an Open-science Project and
+Status of the v2.0 Core Package}. \emph{The Astronomical Journal},
+\emph{156}(3), 123. \url{https://doi.org/10.3847/1538-3881/aabc4f}
+
+\leavevmode\hypertarget{ref-astropy:2013}{}%
+Astropy Collaboration, Robitaille, T. P., Tollerud, E. J., Greenfield,
+P., Droettboom, M., Bray, E., Aldcroft, T., Davis, M., Ginsburg, A.,
+Price-Whelan, A. M., Kerzendorf, W. E., Conley, A., Crighton, N.,
+Barbary, K., Muna, D., Ferguson, H., Grollier, F., Parikh, M. M., Nair,
+P. H., \ldots{} Streicher, O. (2013). {Astropy: A community Python
+package for astronomy}. \emph{Astronomy \& Astrophysics}, \emph{558},
+A33. \url{https://doi.org/10.1051/0004-6361/201322068}
+
+\leavevmode\hypertarget{ref-bell_eureka_2022}{}%
+Bell, T., Ahrer, E.-M., Brande, J., Carter, A., Feinstein, A. D.,
+Caloca, G., Mansfield, M., Zieba, S., Piaulet, C., Benneke, B.,
+Filippazzo, J., May, E., Roy, P.-A., Kreidberg, L., \& Stevenson, K.
+(2022). {Eureka!: An End-to-End Pipeline for JWST Time-Series
+Observations}. \emph{Journal of Open Source Software}, \emph{7}(79),
+4503. \url{https://doi.org/10.21105/joss.04503}
+
+\leavevmode\hypertarget{ref-corner}{}%
+Foreman-Mackey, D. (2016). Corner.py: Scatterplot matrices in python.
+\emph{The Journal of Open Source Software}, \emph{1}(2), 24.
+\url{https://doi.org/10.21105/joss.00024}
+
+\leavevmode\hypertarget{ref-ForemanMackey:2013}{}%
+Foreman-Mackey, D., Hogg, D. W., Lang, D., \& Goodman, J. (2013). Emcee:
+The MCMC hammer. \emph{Publications of the Astronomical Society of the
+Pacific}, \emph{125}(925), 306. \url{https://doi.org/10.1086/670067}
+
+\leavevmode\hypertarget{ref-harris2020array}{}%
+Harris, C. R., Millman, K. J., Walt, S. J. van der, Gommers, R.,
+Virtanen, P., Cournapeau, D., Wieser, E., Taylor, J., Berg, S., Smith,
+N. J., Kern, R., Picus, M., Hoyer, S., Kerkwijk, M. H. van, Brett, M.,
+Haldane, A., Río, J. F. del, Wiebe, M., Peterson, P., \ldots{} Oliphant,
+T. E. (2020). Array programming with {NumPy}. \emph{Nature},
+\emph{585}(7825), 357--362.
+\url{https://doi.org/10.1038/s41586-020-2649-2}
+
+\leavevmode\hypertarget{ref-pysynphot}{}%
+Horne, K. (2013). \emph{Pysynphot: Synthetic photometry software}.
+\url{https://ascl.net/1303.023}; Astrophysics Source Code Library.
+
+\leavevmode\hypertarget{ref-Hunter:2007}{}%
+Hunter, J. D. (2007). Matplotlib: A 2D graphics environment.
+\emph{Computing in Science \& Engineering}, \emph{9}(3), 90--95.
+\url{https://doi.org/10.1109/MCSE.2007.55}
+
+\leavevmode\hypertarget{ref-Husser:2013}{}%
+Husser, T.-O., Wende-von Berg, S., Dreizler, S., Homeier, D., Reiners,
+A., Barman, T., \& Hauschildt, P. H. (2013). A new extensive library of
+PHOENIX stellar atmospheres and synthetic spectra. \emph{Astronomy \&
+Astrophysics}, \emph{553}, A6.
+\url{https://doi.org/10.1051/0004-6361/201219058}
+
+\leavevmode\hypertarget{ref-Iyer:2023}{}%
+Iyer, A. R., Line, M. R., Muirhead, P. S., Fortney, J. J., \&
+Gharib-Nezhad, E. (2023). The SPHINX m-dwarf spectral grid. I.
+Benchmarking new model atmospheres to derive fundamental m-dwarf
+properties. \emph{The Astrophysical Journal}, \emph{944}(1), 41.
+\url{https://doi.org/10.3847/1538-4357/acabc2}
+
+\leavevmode\hypertarget{ref-Lim2023}{}%
+Lim, O., Benneke, B., Doyon, R., MacDonald, R. J., Piaulet, C., Artigau,
+É., Coulombe, L.-P., Radica, M., L'Heureux, A., Albert, L., Rackham, B.
+V., de Wit, J., Salhi, S., Roy, P.-A., Flagg, L., Fournier-Tondreau, M.,
+Taylor, J., Cook, N. J., Lafrenière, D., \ldots{} Darveau-Bernier, A.
+(2023). {Atmospheric Reconnaissance of TRAPPIST-1 b with JWST/NIRISS:
+Evidence for Strong Stellar Contamination in the Transmission Spectra}.
+\emph{The Astrophysical Journal Letters}, \emph{955}(1), L22.
+\url{https://doi.org/10.3847/2041-8213/acf7c4}
+
+\leavevmode\hypertarget{ref-poseidon}{}%
+MacDonald, R. J., \& Madhusudhan, N. (2024). \emph{POSEIDON:
+Multidimensional atmospheric retrieval of exoplanet spectra}.
+\url{https://doi.org/10.21105/joss.04873}
+
+\leavevmode\hypertarget{ref-PiauletGhorayeb:2024}{}%
+Piaulet-Ghorayeb, C., Benneke, B., Radica, M., Raul, E., Coulombe,
+L.-P., Ahrer, E.-M., Kubyshkina, D., Howard, W. S., Krissansen-Totton,
+J., MacDonald, R. J., Roy, P.-A., Louca, A., Christie, D.,
+Fournier-Tondreau, M., Allart, R., Miguel, Y., Schlichting, H. E.,
+Welbanks, L., Cadieux, C., \ldots{} Knutson, H. A. (2024). JWST/NIRISS
+reveals the water-rich {``steam world''} atmosphere of GJ 9827 d.
+\emph{The Astrophysical Journal Letters}, \emph{974}(1), L10.
+\url{https://doi.org/10.3847/2041-8213/ad6f00}
+
+\leavevmode\hypertarget{ref-PiauletGhorayeb:2025}{}%
+Piaulet-Ghorayeb, C., Benneke, B., Turbet, M., Moore, K., Roy, P.-A.,
+Lim, O., Doyon, R., Fauchez, T. J., Albert, L., Radica, M., Coulombe,
+L.-P., Lafrenière, D., Cowan, N. B., Belzile, D., Musfirat, K., Kaur,
+M., L'Heureux, A., Johnstone, D., MacDonald, R. J., \ldots{} Turner, J.
+D. (2025). Strict limits on potential secondary atmospheres on the
+temperate rocky exo-earth TRAPPIST-1 d. \emph{arXiv e-Prints}.
+\url{https://ui.adsabs.harvard.edu/abs/2024ApJ...974L..10P}
+
+\leavevmode\hypertarget{ref-Rackham:2018}{}%
+Rackham, B. V., Apai, D., \& Giampapa, M. S. (2018). The transit light
+source effect: False spectral features and incorrect densities for
+m-dwarf transiting planets. \emph{The Astrophysical Journal},
+\emph{853}(2), 122. \url{https://doi.org/10.3847/1538-4357/aaa08c}
+
+\leavevmode\hypertarget{ref-Radica:2025}{}%
+Radica, M., Piaulet-Ghorayeb, C., Taylor, J., Coulombe, L.-P., Benneke,
+B., Albert, L., Artigau, É., Cowan, N. B., Doyon, R., Lafrenière, D.,
+L'Heureux, A., \& Lim, O. (2025). Promise and peril: Stellar
+contamination and strict limits on the atmosphere composition of
+TRAPPIST-1 c from JWST NIRISS transmission spectra. \emph{The
+Astrophysical Journal Letters}, \emph{979}(1), L5.
+\url{https://doi.org/10.3847/2041-8213/ada381}
+
+\leavevmode\hypertarget{ref-Roy:2023}{}%
+Roy, P.-A., Benneke, B., Piaulet, C., Gully-Santiago, M. A., Crossfield,
+I. J. M., Morley, C. V., Kreidberg, L., Mikal-Evans, T., Brande, J.,
+Delisle, S., Greene, T. P., Hardegree-Ullman, K. K., Barman, T.,
+Christiansen, J. L., Dragomir, D., Fortney, J. J., Howard, A. W.,
+Kosiarek, M. R., \& Lothringer, J. D. (2023). Water absorption in the
+transmission spectrum of the water world candidate GJ 9827 d. \emph{The
+Astrophysical Journal Letters}, \emph{954}(2), L52.
+\url{https://doi.org/10.3847/2041-8213/acebf0}
+
+\leavevmode\hypertarget{ref-pandas:2020}{}%
+team, T. pandas development. (2020). Pandas-dev/pandas: pandas.
+\emph{Zenodo}. \url{https://doi.org/10.5281/zenodo.3509134}
+
+\leavevmode\hypertarget{ref-Townsend:2023}{}%
+Townsend, R., \& Lopez, A. (2023). MSG: A software package for
+interpolating stellar spectra in pre-calculated grids. \emph{The Journal
+of Open Source Software}, \emph{8}(81), 4602.
+\url{https://doi.org/10.21105/joss.04602}
+
+\leavevmode\hypertarget{ref-TRAPPIST1_JWST_2024}{}%
+TRAPPIST-1 JWST Community Initiative, Wit, J. de, Doyon, R., Rackham, B.
+V., Lim, O., Ducrot, E., Kreidberg, L., Benneke, B., Ribas, I., Berardo,
+D., Niraula, P., Iyer, A., Shapiro, A., Kostogryz, N., Witzke, V.,
+Gillon, M., Agol, E., Meadows, V., Burgasser, A. J., \ldots{} Way, M. J.
+(2024). A roadmap for the atmospheric characterization of terrestrial
+exoplanets with JWST. \emph{Nature Astronomy}, \emph{8}, 810--818.
+\url{https://doi.org/10.1038/s41550-024-02298-5}
+
+\leavevmode\hypertarget{ref-2020SciPy-NMeth}{}%
+Virtanen, P., Gommers, R., Oliphant, T. E., Haberland, M., Reddy, T.,
+Cournapeau, D., Burovski, E., Peterson, P., Weckesser, W., Bright, J.,
+van der Walt, S. J., Brett, M., Wilson, J., Millman, K. J., Mayorov, N.,
+Nelson, A. R. J., Jones, E., Kern, R., Larson, E., \ldots{} SciPy 1.0
+Contributors. (2020). {{SciPy} 1.0: Fundamental Algorithms for
+Scientific Computing in Python}. \emph{Nature Methods}, \emph{17},
+261--272. \url{https://doi.org/10.1038/s41592-019-0686-2}
+
+\end{CSLReferences}
+
+\end{document}

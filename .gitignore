@@ -171,3 +171,6 @@ cython_debug/
 .idea/inspectionProfiles/Project_Default.xml
 .idea/inspectionProfiles/profiles_settings.xml
 example/R10000_model_grids/TRAPPIST_1_pymsg.h5
+.DS_Store
+example/.DS_Store
+
