@@ -357,17 +357,17 @@ As the field becomes increasingly ambitious in the search for signs of
 even thin atmospheres on small exoplanets, the TLSE is becoming a
 limiting factor, and it becomes imperative to develop robust inference
 methods to disentangle planetary and stellar contributions to the
-observed spectra. Here, I present \texttt{stctm}, a flexible Bayesian
-retrieval framework to model the impact of the TLSE on any exoplanet
-transmission spectrum, and infer the range of stellar surface parameters
-that are compatible with the observations in the absence of any
-planetary contribution. With the \texttt{exotune} sub-module, users can
-also perform retrievals directly on out-of-transit stellar spectra in
-order to place data-driven priors on the extent to which the TLSE can
-impact any planet's transmission spectrum. The input data formats,
-stellar models, and fitted parameters are easily tunable using
-human-readable files and the code is fully parallelized to enable fast
-inferences.
+observed spectra. Here, I present \texttt{stctm}, the STellar
+ConTamination Modeling framework, a flexible Bayesian retrieval
+framework to model the impact of the TLSE on any exoplanet transmission
+spectrum, and infer the range of stellar surface parameters that are
+compatible with the observations in the absence of any planetary
+contribution. With the \texttt{exotune} sub-module, users can also
+perform retrievals directly on out-of-transit stellar spectra in order
+to place data-driven priors on the extent to which the TLSE can impact
+any planet's transmission spectrum. The input data formats, stellar
+models, and fitted parameters are easily tunable using human-readable
+files and the code is fully parallelized to enable fast inferences.
 
 \hypertarget{statement-of-need}{%
 \section{Statement of need}\label{statement-of-need}}
@@ -411,7 +411,7 @@ atmosphere detections.
 \hypertarget{main-features-of-the-code}{%
 \section{Main features of the code}\label{main-features-of-the-code}}
 
-The user inputs are communicated to the code via an input \texttt{.ini}
+The user inputs are communicated to the code via an input \texttt{.toml}
 file for both TLSE retrievals and inferences from out-of-transit stellar
 spectra. The code follows similar phases for both types of retrievals:
 
@@ -501,14 +501,16 @@ retrievals of the TLSE or on out-of-transit stellar spectra:
 \hypertarget{acknowledgements}{%
 \section{Acknowledgements}\label{acknowledgements}}
 
-\texttt{stctm} relies heavily on other Python libraries which include
-\texttt{numpy} (Harris et al., 2020), \texttt{scipy} (Virtanen et al.,
-2020), \texttt{astropy} (Astropy Collaboration et al., 2018, 2013),
-\texttt{matplotlib} (Hunter, 2007), \texttt{pandas}(team, 2020),
-\texttt{emcee}(Foreman-Mackey et al., 2013), \texttt{corner}
-(Foreman-Mackey, 2016), and \texttt{pysynphot} (Horne, 2013). Users are
-also strongly encouraged to use \texttt{msg}(Townsend \& Lopez, 2023) to
-obtain the grids of stellar models used in the inference step.
+CPG thanks Warrick Ball for pre-review suggestions that improved the
+code documentation and ease of set-up for the user.\texttt{stctm} relies
+heavily on other Python libraries which include \texttt{numpy} (Harris
+et al., 2020), \texttt{scipy} (Virtanen et al., 2020), \texttt{astropy}
+(Astropy Collaboration et al., 2018, 2013), \texttt{matplotlib} (Hunter,
+2007), \texttt{pandas}(team, 2020), \texttt{emcee}(Foreman-Mackey et
+al., 2013), \texttt{corner} (Foreman-Mackey, 2016), and
+\texttt{pysynphot} (Horne, 2013). Users are also strongly encouraged to
+use \texttt{msg}(Townsend \& Lopez, 2023) to obtain the grids of stellar
+models used in the inference step.
 
 CPG also acknowledges support from the E. Margaret Burbidge Prize
 Postdoctoral Fellowship from the Brinson Foundation. She thanks R.
